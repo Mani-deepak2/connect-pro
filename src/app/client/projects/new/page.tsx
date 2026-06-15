@@ -1,0 +1,221 @@
+"use client"
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
+import { Loader2, ArrowLeft, Upload, X } from 'lucide-react'
+import Link from 'next/link'
+import { useForm } from 'react-hook-form'
+
+interface ProjectFormData {
+  title: string;
+  category: string;
+  description: string;
+  required_skills: string;
+  budget_type: 'fixed' | 'hourly';
+  budget_amount: number;
+  duration: string;
+  experience_level: string;
+  deadline: string;
+}
+
+const CATEGORIES = [
+  "Video Editing", "Web Development", "AI Development", "Data Analysis", 
+  "Graphic Design", "Content Writing", "Mobile Development", 
+  "Digital Marketing", "UI/UX Design", "Other"
+]
+
+export default function PostProject() {
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const supabase = createClient()
+  
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<ProjectFormData>({
+    defaultValues: {
+      budget_type: 'fixed',
+      experience_level: 'intermediate',
+      duration: '1-4 weeks'
+    }
+  })
+
+  const budgetType = watch('budget_type')
+
+  const onSubmit = async (data: ProjectFormData) => {
+    setIsLoading(true)
+    setError(null)
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const { error: insertError } = await supabase
+      .from('projects')
+      .insert({
+        client_id: user.id,
+        title: data.title,
+        category: data.category,
+        description: data.description,
+        required_skills: data.required_skills.split(',').map(s => s.trim()).filter(Boolean),
+        budget_type: data.budget_type,
+        budget_amount: data.budget_amount,
+        duration: data.duration,
+        experience_level: data.experience_level,
+        deadline: data.deadline,
+        status: 'open'
+      })
+
+    if (insertError) {
+      setError(insertError.message)
+      setIsLoading(false)
+      return
+    }
+
+    router.push('/client/dashboard')
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0f1115] py-10 px-6">
+      <div className="max-w-3xl mx-auto">
+        <Link href="/client/dashboard" className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+        </Link>
+        
+        <h1 className="text-3xl font-bold text-white mb-8">Post a New Project</h1>
+        
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-xl mb-6">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Project Title</label>
+              <input 
+                {...register('title', { required: 'Required' })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                placeholder="e.g. Need a modern landing page designed"
+              />
+              {errors.title && <span className="text-red-400 text-xs">{errors.title.message}</span>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Category</label>
+                <select 
+                  {...register('category', { required: 'Required' })}
+                  className="w-full bg-[#15171C] border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                >
+                  <option value="">Select Category</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                {errors.category && <span className="text-red-400 text-xs">{errors.category.message}</span>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Required Skills (comma separated)</label>
+                <input 
+                  {...register('required_skills', { required: 'Required' })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                  placeholder="React, Figma, Tailwind"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Project Description</label>
+              <textarea 
+                {...register('description', { required: 'Required', minLength: 50 })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white h-32 resize-none focus:ring-2 focus:ring-purple-500/50"
+                placeholder="Describe your project requirements in detail..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Budget Type</label>
+                <select 
+                  {...register('budget_type')}
+                  className="w-full bg-[#15171C] border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                >
+                  <option value="fixed">Fixed Price</option>
+                  <option value="hourly">Hourly Rate</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">
+                  {budgetType === 'fixed' ? 'Total Budget ($)' : 'Hourly Rate ($/hr)'}
+                </label>
+                <input 
+                  type="number"
+                  {...register('budget_amount', { required: 'Required', min: 1 })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                  placeholder={budgetType === 'fixed' ? "1000" : "50"}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Duration</label>
+                <select 
+                  {...register('duration')}
+                  className="w-full bg-[#15171C] border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                >
+                  <option value="< 1 week">Less than 1 week</option>
+                  <option value="1-4 weeks">1 to 4 weeks</option>
+                  <option value="1-3 months">1 to 3 months</option>
+                  <option value="3-6 months">3 to 6 months</option>
+                  <option value="6+ months">More than 6 months</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Experience Level</label>
+                <select 
+                  {...register('experience_level')}
+                  className="w-full bg-[#15171C] border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50"
+                >
+                  <option value="entry">Entry Level</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="expert">Expert</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Deadline</label>
+                <input 
+                  type="date"
+                  {...register('deadline', { required: 'Required' })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-purple-500/50 [color-scheme:dark]"
+                />
+              </div>
+            </div>
+
+            <div className="pt-6 flex justify-end gap-4">
+              <Link 
+                href="/client/dashboard"
+                className="bg-white/5 hover:bg-white/10 text-white py-3 px-6 rounded-xl transition-colors"
+              >
+                Cancel
+              </Link>
+              <button 
+                type="submit" 
+                disabled={isLoading}
+                className="bg-purple-600 hover:bg-purple-500 text-white py-3 px-8 rounded-xl transition-colors flex items-center disabled:opacity-50"
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
+                Post Project
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
