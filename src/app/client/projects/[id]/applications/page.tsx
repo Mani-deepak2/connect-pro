@@ -50,14 +50,35 @@ export default function ViewApplications() {
     setIsLoading(false)
   }
 
-  const updateStatus = async (appId: string, status: string) => {
+  const updateStatus = async (app: any, status: string) => {
     // Optimistic update
-    setApplications(apps => apps.map(app => app.id === appId ? { ...app, status } : app))
+    setApplications(apps => apps.map(a => a.id === app.id ? { ...a, status } : a))
     
     await supabase
       .from('applications')
       .update({ status })
-      .eq('id', appId)
+      .eq('id', app.id)
+
+    if (status === 'accepted') {
+      // Update project status
+      await supabase.from('projects').update({ status: 'in_progress' }).eq('id', project?.id)
+      
+      // Create Contract
+      await supabase.from('contracts').insert({
+        project_id: project?.id,
+        freelancer_id: app.freelancer_id,
+        client_id: project?.client_id,
+        amount: app.bid_amount,
+        status: 'active'
+      })
+
+      // Create Conversation
+      await supabase.from('conversations').insert({
+        project_id: project?.id,
+        freelancer_id: app.freelancer_id,
+        client_id: project?.client_id
+      })
+    }
   }
 
   if (isLoading) {
@@ -151,23 +172,23 @@ export default function ViewApplications() {
 
                   {app.status === 'pending' && (
                     <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-white/5">
-                      <button onClick={() => updateStatus(app.id, 'rejected')} className="px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors">
+                      <button onClick={() => updateStatus(app, 'rejected')} className="px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors">
                         Reject
                       </button>
-                      <button onClick={() => updateStatus(app.id, 'shortlisted')} className="px-4 py-2 rounded-lg text-sm font-medium text-orange-400 hover:bg-orange-500/10 transition-colors">
+                      <button onClick={() => updateStatus(app, 'shortlisted')} className="px-4 py-2 rounded-lg text-sm font-medium text-orange-400 hover:bg-orange-500/10 transition-colors">
                         Shortlist
                       </button>
-                      <button onClick={() => updateStatus(app.id, 'accepted')} className="px-6 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors">
+                      <button onClick={() => updateStatus(app, 'accepted')} className="px-6 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors">
                         Hire Freelancer
                       </button>
                     </div>
                   )}
                   {app.status === 'shortlisted' && (
                     <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-white/5">
-                      <button onClick={() => updateStatus(app.id, 'rejected')} className="px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors">
+                      <button onClick={() => updateStatus(app, 'rejected')} className="px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors">
                         Reject
                       </button>
-                      <button onClick={() => updateStatus(app.id, 'accepted')} className="px-6 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors">
+                      <button onClick={() => updateStatus(app, 'accepted')} className="px-6 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors">
                         Hire Freelancer
                       </button>
                     </div>

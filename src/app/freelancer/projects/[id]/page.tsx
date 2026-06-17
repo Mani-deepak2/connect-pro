@@ -24,6 +24,7 @@ export default function ProjectDetails() {
   const [hasApplied, setHasApplied] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [creditError, setCreditError] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<ApplicationFormData>()
 
@@ -65,8 +66,17 @@ export default function ProjectDetails() {
 
   const onSubmitApplication = async (data: ApplicationFormData) => {
     setIsSubmitting(true)
+    setCreditError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    // Check credits
+    const { data: creditData } = await supabase.from('credits').select('balance').eq('user_id', user.id).single()
+    if (!creditData || creditData.balance < 2) {
+      setCreditError("You don't have enough credits to apply (2 required). Please purchase more credits.")
+      setIsSubmitting(false)
+      return
+    }
 
     const { error } = await supabase.from('applications').insert({
       project_id: id,
@@ -78,6 +88,14 @@ export default function ProjectDetails() {
     })
 
     if (!error) {
+      // Deduct 2 credits
+      await supabase.from('credits').update({ balance: creditData.balance - 2 }).eq('user_id', user.id)
+      await supabase.from('credit_transactions').insert({
+        user_id: user.id,
+        amount: -2,
+        type: 'application_fee',
+        description: `Applied to project: ${project?.title}`
+      })
       setHasApplied(true)
     }
     setIsSubmitting(false)
@@ -129,7 +147,17 @@ export default function ProjectDetails() {
             {/* Application Form */}
             {!hasApplied && project.status === 'open' && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mt-10">
-                <h3 className="text-xl font-bold text-white mb-6">Submit a Proposal</h3>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-white">Submit a Proposal</h3>
+                  <span className="text-sm font-medium text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full">Cost: 2 Credits</span>
+                </div>
+                
+                {creditError && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-xl mb-6 text-sm">
+                    {creditError}
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit(onSubmitApplication)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">

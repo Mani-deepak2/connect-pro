@@ -46,42 +46,42 @@ export default function FindProjects() {
   })
 
   return (
-    <div className="min-h-screen bg-[#0f1115] py-10 px-6">
+    <div className="min-h-screen bg-[#F7F6F3] py-10 px-6">
       <div className="max-w-6xl mx-auto">
-        <Link href="/freelancer/dashboard" className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
+        <Link href="/freelancer/dashboard" className="inline-flex items-center text-[#5B5E68] hover:text-[#15171C] mb-8 transition-colors font-medium">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
         </Link>
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Find Work</h1>
-            <p className="text-gray-400">Discover and apply to the latest projects</p>
+            <h1 className="text-3xl font-display font-bold text-[#15171C] mb-2">Find Work</h1>
+            <p className="text-[#5B5E68]">Discover and apply to the latest projects</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Filters Sidebar */}
           <div className="space-y-6">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center"><Filter className="w-4 h-4 mr-2"/> Filters</h3>
+            <div className="bg-white border border-[#ECEAE5] rounded-3xl p-6 shadow-sm">
+              <h3 className="text-lg font-display font-bold text-[#15171C] mb-4 flex items-center"><Filter className="w-4 h-4 mr-2"/> Filters</h3>
               
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-300 block mb-2">Search</label>
+                  <label className="text-sm font-semibold text-[#15171C] block mb-2">Search</label>
                   <div className="relative">
-                    <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="w-4 h-4 text-[#8A8D96] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input 
                       type="text"
                       placeholder="Keywords..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full bg-[#15171C] border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm focus:ring-2 focus:ring-purple-500/50"
+                      className="w-full bg-[#F7F6F3] border border-[#ECEAE5] rounded-xl py-2 pl-10 pr-4 text-[#15171C] text-sm focus:outline-none focus:ring-4 focus:ring-[#2563EB]/10 focus:border-[#2563EB] transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-300 block mb-2">Category</label>
+                  <label className="text-sm font-semibold text-[#15171C] block mb-2">Category</label>
                   <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                     {CATEGORIES.map(cat => (
                       <label key={cat} className="flex items-center space-x-3 cursor-pointer group">
@@ -90,9 +90,9 @@ export default function FindProjects() {
                           name="category"
                           checked={selectedCategory === cat}
                           onChange={() => setSelectedCategory(cat)}
-                          className="w-4 h-4 rounded border-white/20 bg-black/20 text-purple-600 focus:ring-purple-500/50 focus:ring-offset-0"
+                          className="w-4 h-4 rounded border-[#ECEAE5] text-[#2563EB] focus:ring-[#2563EB]/50 focus:ring-offset-0"
                         />
-                        <span className={`text-sm ${selectedCategory === cat ? 'text-white font-medium' : 'text-gray-400 group-hover:text-gray-300'}`}>
+                        <span className={`text-sm ${selectedCategory === cat ? 'text-[#15171C] font-semibold' : 'text-[#5B5E68] group-hover:text-[#15171C]'}`}>
                           {cat}
                         </span>
                       </label>
