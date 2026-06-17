@@ -1,9 +1,12 @@
-import React from "react";
-import { Star, MapPin, Heart, Plus } from "lucide-react";
+"use client";
+import React, { useState } from "react";
+import { Star, MapPin, Check, Plus, X, Heart } from "lucide-react";
 import Image from "next/image";
+import { createClient } from "@/utils/supabase/client";
 
 export interface Applicant {
   id: string;
+  freelancer_id?: string;
   name: string;
   avatarUrl?: string;
   location: string;
@@ -11,10 +14,26 @@ export interface Applicant {
   rating: number;
   reviewsCount: number;
   tags: string[];
-  status: 'available' | 'busy' | 'hired';
+  status: string;
 }
 
 export function ApplicantCard({ applicant }: { applicant: Applicant }) {
+  const [status, setStatus] = useState(applicant.status);
+  const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClient();
+
+  const updateStatus = async (newStatus: string) => {
+    setIsLoading(true);
+    const { error } = await supabase
+      .from('applications')
+      .update({ status: newStatus })
+      .eq('id', applicant.id);
+      
+    if (!error) {
+      setStatus(newStatus);
+    }
+    setIsLoading(false);
+  };
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       <div className="p-5">
@@ -60,21 +79,66 @@ export function ApplicantCard({ applicant }: { applicant: Applicant }) {
         </div>
 
         <div className="flex gap-2">
-          <button className="flex-1 py-2 px-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2">
-            <Heart className="w-4 h-4 text-gray-400" /> Wishlist
-          </button>
-          <button className="flex-1 py-2 px-3 bg-teal-50 text-teal-700 rounded-lg text-sm font-medium hover:bg-teal-100 flex items-center justify-center gap-2">
-            <Plus className="w-4 h-4" /> Invite
-          </button>
+          {status === 'pending' && (
+            <>
+              <button 
+                onClick={() => updateStatus('rejected')}
+                disabled={isLoading}
+                className="flex-1 py-2 px-3 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" /> Reject
+              </button>
+              <button 
+                onClick={() => updateStatus('shortlisted')}
+                disabled={isLoading}
+                className="flex-1 py-2 px-3 bg-teal-50 text-teal-700 rounded-lg text-sm font-medium hover:bg-teal-100 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Heart className="w-4 h-4" /> Shortlist
+              </button>
+            </>
+          )}
+          
+          {status === 'shortlisted' && (
+            <>
+              <button 
+                onClick={() => updateStatus('rejected')}
+                disabled={isLoading}
+                className="flex-1 py-2 px-3 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" /> Reject
+              </button>
+              <button 
+                onClick={() => updateStatus('accepted')}
+                disabled={isLoading}
+                className="flex-1 py-2 px-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" /> Hire
+              </button>
+            </>
+          )}
+
+          {status === 'accepted' && (
+            <button disabled className="w-full py-2 px-3 bg-green-50 text-green-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+              <Check className="w-4 h-4" /> Hired
+            </button>
+          )}
+
+          {status === 'rejected' && (
+            <button disabled className="w-full py-2 px-3 bg-gray-50 text-gray-500 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+              <X className="w-4 h-4" /> Rejected
+            </button>
+          )}
         </div>
       </div>
       
       <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
-        <span className="text-gray-500">Recently Hired</span>
+        <span className="text-gray-500">Applicant Status</span>
         <span className={`font-medium ${
-          applicant.status === 'available' ? 'text-teal-600' : 'text-gray-500'
+          status === 'accepted' ? 'text-green-600' : 
+          status === 'rejected' ? 'text-red-500' :
+          status === 'shortlisted' ? 'text-teal-600' : 'text-gray-500'
         }`}>
-          • {applicant.status.charAt(0).toUpperCase() + applicant.status.slice(1)}
+          • {status.charAt(0).toUpperCase() + status.slice(1)}
         </span>
       </div>
     </div>
