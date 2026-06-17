@@ -75,3 +75,49 @@ export interface Notification {
   metadata: any;
   created_at: string;
 }
+
+export interface Credit {
+  user_id: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreditTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  type: 'signup_bonus' | 'application_fee' | 'purchase';
+  description?: string;
+  created_at: string;
+}
+
+export type ContractStatus = 'active' | 'completed' | 'cancelled';
+
+export interface Contract {
+  id: string;
+  project_id: string;
+  freelancer_id: string;
+  client_id: string;
+  amount: number;
+  status: ContractStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  project_id: string;
+  client_id: string;
+  freelancer_id: string;
+  created_at: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
