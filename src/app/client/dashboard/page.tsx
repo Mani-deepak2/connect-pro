@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { 
@@ -14,23 +14,15 @@ import { ProjectCardSkeleton } from '@/components/ui/LoadingSkeleton'
 import { Project } from '@/types'
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 
-const RECENT_ACTIVITY = [
-  { id: 1, type: 'applicant', message: 'Sarah Smith applied for Full Stack Developer', time: '2 hours ago', icon: UserPlus, color: 'text-blue-500', bg: 'bg-blue-50' },
-  { id: 2, type: 'message', message: 'New message from Michael Johnson', time: '5 hours ago', icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-  { id: 3, type: 'contract', message: 'Contract signed for E-commerce Project', time: '1 day ago', icon: FileText, color: 'text-purple-500', bg: 'bg-purple-50' },
-  { id: 4, type: 'payment', message: 'Payment of $1,500 successfully processed', time: '2 days ago', icon: DollarSign, color: 'text-orange-500', bg: 'bg-orange-50' },
-]
-
-const RECOMMENDED_FREELANCERS = [
-  { id: 1, name: 'Alex Rivera', role: 'Senior React Developer', rating: 4.9, rate: '$65/hr', img: 'A' },
-  { id: 2, name: 'Emily Chen', role: 'UI/UX Designer', rating: 5.0, rate: '$50/hr', img: 'E' },
-  { id: 3, name: 'David Kim', role: 'Node.js Expert', rating: 4.8, rate: '$75/hr', img: 'D' },
-]
+// Dynamic data will be fetched from Supabase
 
 export default function ClientDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [contractsCount, setContractsCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [clientName, setClientName] = useState<string>('')
+  const [recommendedFreelancers, setRecommendedFreelancers] = useState<any[]>([])
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
   const router = useRouter()
   const supabase = createClient()
 
@@ -68,9 +60,33 @@ export default function ClientDashboard() {
       setProjects(data as Project[])
     }
 
-    // Fetch contracts count
-    const { count: cCount } = await supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('client_id', user.id)
+    // Parallel fetching for performance
+    const [
+      { count: cCount },
+      { data: profileData },
+      { data: freelancersData },
+      { data: activityData }
+    ] = await Promise.all([
+      supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('client_id', user.id),
+      supabase.from('client_profiles').select('company_name').eq('user_id', user.id).single(),
+      supabase.from('freelancer_profiles').select('*').limit(3),
+      supabase.from('applications')
+        .select(`
+          id,
+          status,
+          created_at,
+          projects!inner(client_id, title),
+          freelancer_profiles(full_name)
+        `)
+        .eq('projects.client_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(4)
+    ])
+
     if (cCount !== null) setContractsCount(cCount)
+    if (profileData) setClientName(profileData.company_name)
+    if (freelancersData) setRecommendedFreelancers(freelancersData)
+    if (activityData) setRecentActivity(activityData)
 
     setIsLoading(false)
   }
@@ -86,7 +102,7 @@ export default function ClientDashboard() {
       {/* Welcome Header */}
       <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Welcome back!</h1>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Welcome back{clientName ? `, ${clientName}` : ''}!</h1>
           <p className="text-gray-500">Here's what's happening with your hiring pipeline today.</p>
         </div>
         <div className="flex items-center gap-4">
@@ -131,7 +147,18 @@ export default function ClientDashboard() {
       </div>
 
       {/* Analytics Charts */}
-      <DashboardCharts />
+      <DashboardCharts hiringData={useMemo(() => {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const data = months.slice(0, new Date().getMonth() + 1).map(m => ({ name: m, hires: 0 }))
+        projects.forEach(p => {
+          const d = new Date(p.created_at)
+          if (d.getFullYear() === new Date().getFullYear()) {
+            const m = d.getMonth()
+            if (data[m]) data[m].hires += 1
+          }
+        })
+        return data.slice(-7).length > 0 ? data.slice(-7) : undefined
+      }, [projects])} />
 
       {/* Three Column Layout for Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -151,9 +178,9 @@ export default function ClientDashboard() {
             </div>
           ) : projects.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {projects.slice(0, 4).map(project => (
+               {projects.slice(0, 4).map((project, index) => (
                  <ProjectCard 
-                    key={project.id} 
+                    key={`${project.id || 'proj'}-${index}`} 
                     project={project} 
                     href={`/client/workspace/${project.id}`} 
                  />
@@ -179,17 +206,23 @@ export default function ClientDashboard() {
               <h3 className="text-base font-bold text-gray-900">Recent Activity</h3>
             </div>
             <div className="space-y-6">
-              {RECENT_ACTIVITY.map((activity) => (
-                <div key={activity.id} className="flex gap-4">
-                  <div className={`mt-0.5 w-8 h-8 rounded-full ${activity.bg} flex items-center justify-center shrink-0`}>
-                    <activity.icon className={`w-4 h-4 ${activity.color}`} />
+              {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
+                <div key={`${activity.id || 'act'}-${index}`} className="flex gap-4">
+                  <div className="mt-0.5 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                    <UserPlus className="w-4 h-4 text-blue-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-800 font-medium leading-snug">{activity.message}</p>
-                    <span className="text-xs text-gray-400 mt-1 block">{activity.time}</span>
+                    <p className="text-sm text-gray-800 font-medium leading-snug">
+                      {activity.freelancer_profiles?.full_name || 'A freelancer'} applied for "{activity.projects?.title}"
+                    </p>
+                    <span className="text-xs text-gray-400 mt-1 block">
+                      {new Date(activity.created_at).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-gray-500">No recent activity found.</p>
+              )}
             </div>
             <button className="w-full mt-6 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
               View Full History
@@ -202,23 +235,29 @@ export default function ClientDashboard() {
               <h3 className="text-base font-bold text-gray-900">Recommended For You</h3>
             </div>
             <div className="space-y-4">
-              {RECOMMENDED_FREELANCERS.map((freelancer) => (
-                <div key={freelancer.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-gray-50 transition-colors cursor-pointer border border-transparent hover:border-gray-100">
+              {recommendedFreelancers.length > 0 ? recommendedFreelancers.map((freelancer, index) => (
+                <Link href={`/profile/${freelancer.user_id}`} key={`${freelancer.id || 'free'}-${index}`} className="flex items-center justify-between p-3 rounded-2xl hover:bg-gray-50 transition-colors cursor-pointer border border-transparent hover:border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
-                      {freelancer.img}
+                    <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold overflow-hidden">
+                      {freelancer.profile_image ? (
+                        <img src={freelancer.profile_image} alt={freelancer.full_name} className="w-full h-full object-cover" />
+                      ) : (
+                        freelancer.full_name?.charAt(0) || 'U'
+                      )}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900">{freelancer.name}</p>
-                      <p className="text-xs text-gray-500">{freelancer.role}</p>
+                      <p className="text-sm font-bold text-gray-900">{freelancer.full_name || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500">{freelancer.title || freelancer.experience_level || 'Freelancer'}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900">{freelancer.rate}</p>
-                    <p className="text-xs font-medium text-yellow-600">★ {freelancer.rating}</p>
+                    <p className="text-sm font-bold text-gray-900">${freelancer.hourly_rate || 0}/hr</p>
+                    <p className="text-xs font-medium text-yellow-600">★ 5.0</p>
                   </div>
-                </div>
-              ))}
+                </Link>
+              )) : (
+                <p className="text-sm text-gray-500">No freelancers found.</p>
+              )}
             </div>
             <button className="w-full mt-4 py-2 text-sm font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-xl transition-colors">
               Discover More
