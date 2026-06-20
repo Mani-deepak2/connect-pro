@@ -12,6 +12,10 @@ export default function FindWork() {
   const [projects, setProjects] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Filters
+  const [filterJobType, setFilterJobType] = useState<string[]>([])
+  const [filterExperience, setFilterExperience] = useState<string[]>([])
+
   const supabase = createClient()
 
   useEffect(() => {
@@ -40,7 +44,38 @@ export default function FindWork() {
     { id: '2', title: 'Complete UX/UI Redesign for Mobile App', company: 'HealthFlow', fixed_budget: 5000, budget_type: 'fixed', duration: '1 month', experience_level: 'intermediate', verified: true, spent: '$2k+', location: 'Canada', created_at: new Date().toISOString(), description: 'Need a complete redesign of our fitness tracking app. We will provide wireframes and brand guidelines. Deliverables should be in Figma.', required_skills: ['Figma', 'UI Design', 'Mobile App', 'Prototyping'] },
   ]
 
-  const displayProjects = projects.length > 0 ? projects : MOCK_JOBS
+  const displayProjects = (projects.length > 0 ? projects : MOCK_JOBS).filter(job => {
+    // Search Term
+    if (searchTerm && !job.title.toLowerCase().includes(searchTerm.toLowerCase()) && !job.description.toLowerCase().includes(searchTerm.toLowerCase())) return false
+    
+    // Job Type
+    if (filterJobType.length > 0) {
+      if (filterJobType.includes('Hourly Contracts') && job.budget_type !== 'hourly') return false
+      if (filterJobType.includes('Fixed Price Contracts') && job.budget_type !== 'fixed') return false
+    }
+
+    // Experience Level
+    if (filterExperience.length > 0) {
+      const el = job.experience_level?.toLowerCase()
+      if (filterExperience.includes('Entry Level') && el !== 'entry') return false
+      if (filterExperience.includes('Intermediate') && el !== 'intermediate') return false
+      if (filterExperience.includes('Expert') && el !== 'expert') return false
+    }
+
+    return true
+  })
+
+  const toggleFilter = (setFn: any, current: string[], value: string) => {
+    if (value === 'Any Job Type' || value === 'Any History') {
+      setFn([])
+      return
+    }
+    if (current.includes(value)) {
+      setFn(current.filter(item => item !== value))
+    } else {
+      setFn([...current, value])
+    }
+  }
 
   return (
     <div className="p-6 md:p-10 text-gray-900 h-full overflow-y-auto bg-gray-50/50 flex flex-col xl:flex-row gap-8">
@@ -179,7 +214,12 @@ export default function FindWork() {
           <div className="space-y-3">
             {['Any Job Type', 'Hourly Contracts', 'Fixed Price Contracts'].map((type, i) => (
               <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                <input type="checkbox" defaultChecked={i === 0} className="w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500" />
+                <input 
+                  type="checkbox" 
+                  checked={type === 'Any Job Type' ? filterJobType.length === 0 : filterJobType.includes(type)}
+                  onChange={() => toggleFilter(setFilterJobType, filterJobType, type)}
+                  className="w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500" 
+                />
                 <span className="text-gray-600 text-sm font-medium">{type}</span>
               </label>
             ))}
@@ -191,7 +231,12 @@ export default function FindWork() {
           <div className="space-y-3">
             {['Entry Level', 'Intermediate', 'Expert'].map(level => (
               <label key={level} className="flex items-center gap-3 cursor-pointer group">
-                <input type="checkbox" className="w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500" />
+                <input 
+                  type="checkbox" 
+                  checked={filterExperience.includes(level)}
+                  onChange={() => toggleFilter(setFilterExperience, filterExperience, level)}
+                  className="w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500" 
+                />
                 <span className="text-gray-600 text-sm font-medium">{level}</span>
               </label>
             ))}

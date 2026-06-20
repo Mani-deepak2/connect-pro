@@ -69,6 +69,21 @@ export default function ClientContractDetails({ params }: { params: { id: string
     setIsProcessing(false)
   }
 
+  const handleDispute = async (submissionId: string) => {
+    if (!confirm('Are you sure you want to open a dispute? An admin will review the case.')) return
+    setIsProcessing(true)
+    
+    await supabase
+      .from('work_submissions')
+      .update({ status: 'disputed' })
+      .eq('id', submissionId)
+
+    await supabase.from('contracts').update({ status: 'disputed' }).eq('id', contract.id)
+
+    fetchContractDetails()
+    setIsProcessing(false)
+  }
+
   const handleApproveAndPay = async (submissionId: string) => {
     if (!confirm('Are you sure you want to approve this work and release payment? This cannot be undone.')) return
     
@@ -182,6 +197,13 @@ export default function ClientContractDetails({ params }: { params: { id: string
                 {sub.status === 'pending' && contract.status === 'active' && (
                   <div className="border-t border-[#ECEAE5] pt-6">
                     <div className="flex gap-4">
+                      <button 
+                        onClick={() => handleDispute(sub.id)}
+                        disabled={isProcessing}
+                        className="flex-1 bg-white border-2 border-red-500 text-red-500 font-bold py-3 px-4 rounded-full hover:bg-red-50 transition-colors"
+                      >
+                        Open Dispute
+                      </button>
                       <button 
                         onClick={() => setActiveSubmissionId(activeSubmissionId === sub.id ? null : sub.id)}
                         className="flex-1 bg-white border-2 border-[#15171C] text-[#15171C] font-bold py-3 px-4 rounded-full hover:bg-[#F7F6F3] transition-colors"

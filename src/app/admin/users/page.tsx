@@ -8,6 +8,8 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const [managingCreditsFor, setManagingCreditsFor] = useState<string | null>(null)
+  const [creditAmount, setCreditAmount] = useState<number>(50)
   const supabase = createClient()
 
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function AdminUsersPage() {
     setIsLoading(true)
     const { data } = await supabase
       .from('users')
-      .select('*')
+      .select('*, credits(balance)')
       .order('created_at', { ascending: false })
       .limit(50)
       
@@ -29,6 +31,26 @@ export default function AdminUsersPage() {
   const handleUpdateRole = async (userId: string, newRole: string) => {
     await supabase.from('users').update({ role: newRole }).eq('id', userId)
     setSelectedUser(null)
+    fetchUsers()
+  }
+
+  const handleGrantCredits = async () => {
+    if (!managingCreditsFor) return
+    const userId = managingCreditsFor
+    
+    // Fetch current
+    const { data: current } = await supabase.from('credits').select('balance').eq('user_id', userId).single()
+    const newBalance = (current?.balance || 0) + creditAmount
+    
+    await supabase.from('credits').upsert({ user_id: userId, balance: newBalance })
+    await supabase.from('credit_transactions').insert({
+      user_id: userId,
+      amount: creditAmount,
+      type: 'purchase',
+      reason: 'Admin Granted Credits'
+    })
+    
+    setManagingCreditsFor(null)
     fetchUsers()
   }
 
@@ -80,6 +102,7 @@ export default function AdminUsersPage() {
                   <th className="text-left px-5 py-3.5 font-semibold">User</th>
                   <th className="text-left px-5 py-3.5 font-semibold">Role</th>
                   <th className="text-left px-5 py-3.5 font-semibold">Joined</th>
+                  <th className="text-center px-5 py-3.5 font-semibold">Credits</th>
                   <th className="text-left px-5 py-3.5 font-semibold">Status</th>
                   <th className="text-right px-5 py-3.5 font-semibold">Actions</th>
                 </tr>
@@ -105,6 +128,11 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-5 py-4 text-[#6B7A90] text-xs">
                       {new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <span className="text-yellow-500 font-mono font-bold bg-yellow-500/10 px-2 py-1 rounded-md border border-yellow-500/20">
+                        {user.credits?.[0]?.balance || user.credits?.balance || 0}
+                      </span>
                     </td>
                     <td className="px-5 py-4">
                       <span className="inline-flex items-center gap-1 text-emerald-400 text-xs font-semibold">
@@ -146,6 +174,13 @@ export default function AdminUsersPage() {
                               </button>
                             )}
                             <div className="border-t border-[#1B2232] my-1"></div>
+                            <button 
+                              onClick={() => { setSelectedUser(null); setManagingCreditsFor(user.id); }}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-[#1B2232] flex items-center gap-2 text-yellow-400"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" /> Manage Credits
+                            </button>
+                            <div className="border-t border-[#1B2232] my-1"></div>
                             <button className="w-full text-left px-3 py-2 text-xs hover:bg-red-500/10 flex items-center gap-2 text-red-400">
                               <Ban className="w-3.5 h-3.5" /> Suspend User
                             </button>
@@ -160,6 +195,38 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {managingCreditsFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0D1117] border border-[#1B2232] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-4">Grant Credits</h3>
+            <p className="text-sm text-[#6B7A90] mb-4">Add credits to the user's account manually.</p>
+            
+            <label className="block text-xs font-medium text-[#6B7A90] mb-2 uppercase tracking-wider">Amount</label>
+            <input 
+              type="number" 
+              value={creditAmount}
+              onChange={(e) => setCreditAmount(Number(e.target.value))}
+              className="w-full bg-[#131720] border border-[#1B2232] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500 mb-6"
+            />
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setManagingCreditsFor(null)}
+                className="flex-1 py-3 px-4 bg-[#131720] hover:bg-[#1B2232] text-white rounded-xl transition-colors font-medium border border-[#1B2232]"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleGrantCredits}
+                className="flex-1 py-3 px-4 bg-yellow-500 hover:bg-yellow-600 text-yellow-950 rounded-xl transition-colors font-bold shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+              >
+                Grant Credits
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

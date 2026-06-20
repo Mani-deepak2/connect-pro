@@ -181,7 +181,7 @@ export default async function WorkspacePage({
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {applicants.length > 0 ? (
                   applicants.map(applicant => (
-                    <ApplicantCard key={applicant.id} applicant={applicant} />
+                    <ApplicantCard key={applicant.id} applicant={applicant} projectId={projectId} />
                   ))
                 ) : (
                   <div className="col-span-full py-12 text-center text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">

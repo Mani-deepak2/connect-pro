@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Star, MapPin, Check, Plus, X, Heart } from "lucide-react";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/client";
+import { hireApplicant } from "@/app/actions/contracts";
 
 export interface Applicant {
   id: string;
@@ -17,7 +18,7 @@ export interface Applicant {
   status: string;
 }
 
-export function ApplicantCard({ applicant }: { applicant: Applicant }) {
+export function ApplicantCard({ applicant, projectId }: { applicant: Applicant, projectId: string }) {
   const [status, setStatus] = useState(applicant.status);
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
@@ -34,6 +35,18 @@ export function ApplicantCard({ applicant }: { applicant: Applicant }) {
     }
     setIsLoading(false);
   };
+
+  const handleHire = async () => {
+    setIsLoading(true);
+    const res = await hireApplicant(applicant.id, projectId);
+    if (res.success) {
+      setStatus('accepted');
+    } else {
+      console.error(res.error);
+    }
+    setIsLoading(false);
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       <div className="p-5">
@@ -108,7 +121,7 @@ export function ApplicantCard({ applicant }: { applicant: Applicant }) {
                 <X className="w-4 h-4" /> Reject
               </button>
               <button 
-                onClick={() => updateStatus('accepted')}
+                onClick={handleHire}
                 disabled={isLoading}
                 className="flex-1 py-2 px-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center justify-center gap-2 disabled:opacity-50"
               >

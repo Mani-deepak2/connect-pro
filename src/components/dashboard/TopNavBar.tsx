@@ -2,16 +2,66 @@
 import { Bell, Search, User } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/utils/supabase/client'
+import { CreditBalance } from './CreditBalance'
 
 export function TopNavBar() {
   const [showNotifications, setShowNotifications] = useState(false)
 
-  // Mock notifications
-  const notifications = [
-    { id: 1, type: 'applicant', message: 'John Doe applied to your Senior React Developer project.', time: '2m ago' },
-    { id: 2, type: 'message', message: 'Sarah Smith sent you a message.', time: '1h ago' },
-    { id: 3, type: 'contract', message: 'Payment of $1,500 successfully processed.', time: '3h ago' },
-  ]
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchNotifications()
+
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const channel = supabase
+        .channel('public:notifications')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          setNotifications(prev => [payload.new, ...prev])
+          setUnreadCount(prev => prev + 1)
+        })
+        .subscribe()
+
+      return () => { supabase.removeChannel(channel) }
+    }
+    setupRealtime()
+  }, [])
+
+  const fetchNotifications = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    if (data) {
+      setNotifications(data)
+      setUnreadCount(data.filter(n => !n.is_read && !n.read).length)
+    }
+  }
+
+  const markAllRead = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    await supabase.from('notifications').update({ is_read: true, read: true }).eq('user_id', user.id)
+    setUnreadCount(0)
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true, read: true })))
+  }
 
   return (
     <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-gray-200">
@@ -30,6 +80,9 @@ export function TopNavBar() {
 
         {/* Right side (Notifications & Profile) */}
         <div className="flex items-center gap-4 ml-auto">
+          {/* Credit Balance */}
+          <CreditBalance />
+
           {/* Notification Center */}
           <div className="relative">
             <button 
@@ -37,7 +90,9 @@ export function TopNavBar() {
               className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+              )}
             </button>
 
             {/* Notification Dropdown */}
@@ -45,13 +100,17 @@ export function TopNavBar() {
               <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-100 shadow-xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-4 z-50">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50 bg-gray-50/50">
                   <h3 className="font-semibold text-gray-900">Notifications</h3>
-                  <button className="text-xs text-teal-600 font-medium hover:text-teal-700">Mark all read</button>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllRead} className="text-xs text-teal-600 font-medium hover:text-teal-700">Mark all read</button>
+                  )}
                 </div>
                 <div className="max-h-[300px] overflow-y-auto">
-                  {notifications.map((notif) => (
-                    <div key={notif.id} className="px-4 py-3 border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer">
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500 text-sm">No notifications</div>
+                  ) : notifications.map((notif) => (
+                    <div key={notif.id} className={`px-4 py-3 border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer ${(!notif.is_read && !notif.read) ? 'bg-teal-50/30' : ''}`}>
                       <p className="text-sm text-gray-800 mb-1">{notif.message}</p>
-                      <span className="text-xs text-gray-400">{notif.time}</span>
+                      <span className="text-xs text-gray-400">{new Date(notif.created_at).toLocaleDateString()}</span>
                     </div>
                   ))}
                 </div>
