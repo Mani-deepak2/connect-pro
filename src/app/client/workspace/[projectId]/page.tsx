@@ -43,8 +43,8 @@ export default async function WorkspacePage({
   params,
   searchParams,
 }: {
-  params: { projectId: string };
-  searchParams: { tab?: string; status?: string };
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ tab?: string; status?: string }>;
 }) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;

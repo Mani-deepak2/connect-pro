@@ -19,6 +19,7 @@ export default function FreelancerProfilePage() {
   
   const [activeTab, setActiveTab] = useState('Basic Information')
   const [isLoading, setIsLoading] = useState(true)
+  const [isOwner, setIsOwner] = useState(false)
   
   // Data States
   const [profile, setProfile] = useState<any>(null)
@@ -37,6 +38,9 @@ export default function FreelancerProfilePage() {
   const fetchProfileData = async () => {
     setIsLoading(true)
     
+    // Get current logged in user to check ownership
+    const { data: { user } } = await supabase.auth.getUser()
+
     // Fetch profile by username (or fallback to id if username is a UUID)
     const { data: profileData, error } = await supabase
       .from('freelancer_profiles')
@@ -47,6 +51,10 @@ export default function FreelancerProfilePage() {
     if (profileData) {
       setProfile(profileData)
       const freelancerId = profileData.user_id
+
+      if (user && user.id === freelancerId) {
+        setIsOwner(true)
+      }
 
       // Parallel fetch all other data
       const [
@@ -88,7 +96,7 @@ export default function FreelancerProfilePage() {
       <div className="max-w-7xl mx-auto">
         
         {/* Header Section */}
-        <ProfileHeader profile={profile} stats={stats} />
+        <ProfileHeader profile={profile} stats={stats} isOwner={isOwner} />
 
         {/* Two Column Layout */}
         <div className="flex flex-col lg:flex-row gap-6">
@@ -97,15 +105,15 @@ export default function FreelancerProfilePage() {
           <div className="w-full lg:w-2/3">
             
             {/* Tabs Navigation */}
-            <div className="flex overflow-x-auto hide-scrollbar mb-6 bg-white border border-[#ECEAE5] rounded-2xl p-2 shadow-sm gap-2">
+            <div className="flex overflow-x-auto hide-scrollbar mb-6 bg-white dark:bg-[#15171C] border border-[#ECEAE5] dark:border-[#2A2B32] rounded-2xl p-2 shadow-sm gap-2">
               {TABS.map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`whitespace-nowrap px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     activeTab === tab 
-                      ? 'bg-[#15171C] text-white shadow-md' 
-                      : 'text-[#5B5E68] hover:bg-[#F7F6F3] hover:text-[#15171C]'
+                      ? 'bg-[#15171C] dark:bg-[#2563EB] text-white shadow-md' 
+                      : 'text-[#5B5E68] dark:text-[#8A8D96] hover:bg-[#F7F6F3] dark:hover:bg-[#2A2B32] hover:text-[#15171C] dark:hover:text-[#ECEAE5]'
                   }`}
                 >
                   {tab}

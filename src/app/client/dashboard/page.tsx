@@ -7,6 +7,7 @@ import {
   Settings, LogOut, CheckCircle, PlusCircle, Menu, X, BarChart3, Briefcase
 } from 'lucide-react'
 import Link from 'next/link'
+import NotificationBell from '@/components/NotificationBell'
 import { ProjectCard } from '@/components/projects/ProjectCard'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ProjectCardSkeleton } from '@/components/ui/LoadingSkeleton'
@@ -21,6 +22,21 @@ export default function ClientDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
+
+  // Auto-Admin script for admin22006@gmail.com
+  useEffect(() => {
+    const makeAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user && user.email === 'admin22006@gmail.com') {
+        const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
+        if (profile?.role !== 'admin') {
+          await supabase.from('users').update({ role: 'admin' }).eq('id', user.id)
+          router.push('/admin')
+        }
+      }
+    }
+    makeAdmin()
+  }, [])
 
   useEffect(() => {
     fetchProjects()
@@ -103,10 +119,13 @@ export default function ClientDashboard() {
             <h1 className="text-3xl font-display font-bold text-[#15171C] mb-2">Client Dashboard</h1>
             <p className="text-[#5B5E68]">Manage your projects and hired freelancers.</p>
           </div>
-          <Link href="/client/projects/new" className="bg-[#15171C] hover:bg-[#2563EB] text-white font-semibold py-3 px-6 rounded-full transition-colors flex items-center shadow-lg shadow-black/10">
-            <PlusCircle className="w-5 h-5 mr-2" />
-            Post New Project
-          </Link>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <Link href="/client/projects/new" className="bg-[#15171C] hover:bg-[#2563EB] text-white font-semibold py-3 px-6 rounded-full transition-colors flex items-center shadow-lg shadow-black/10">
+              <PlusCircle className="w-5 h-5 mr-2" />
+              Post New Project
+            </Link>
+          </div>
         </header>
 
         {/* Stats Grid */}
@@ -142,7 +161,7 @@ export default function ClientDashboard() {
                  <ProjectCard 
                     key={project.id} 
                     project={project} 
-                    href={`/client/projects/${project.id}/applications`} 
+                    href={`/client/workspace/${project.id}`} 
                  />
                ))}
             </div>

@@ -6,7 +6,7 @@ export default async function WorkspaceLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { projectId: string };
+  params: Promise<{ projectId: string }>;
 }) {
   const resolvedParams = await params;
 
