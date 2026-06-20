@@ -18,3 +18,33 @@
     color: var(--color-foreground);
   }
 }
+
+/* Dark Mode Smart Overrides */
+.dark {
+  color-scheme: dark;
+}
+
+/* Invert Backgrounds */
+.dark .bg-white { background-color: #0f1115 !important; }
+.dark .bg-gray-50 { background-color: #1a1d24 !important; }
+.dark .bg-gray-100 { background-color: #232730 !important; }
+.dark .bg-gray-200 { background-color: #2f343f !important; }
+
+/* Invert Texts */
+.dark .text-gray-900 { color: #f9fafb !important; }
+.dark .text-gray-800 { color: #e5e7eb !important; }
+.dark .text-gray-700 { color: #d1d5db !important; }
+.dark .text-gray-600 { color: #a7b0c0 !important; }
+.dark .text-gray-500 { color: #7b8599 !important; }
+
+/* Invert Borders */
+.dark .border-gray-200 { border-color: #2f343f !important; }
+.dark .border-gray-100 { border-color: #232730 !important; }
+.dark .border-gray-50 { border-color: #1a1d24 !important; }
+
+/* Fix arbitrary hex colors that act as light/dark variants */
+.dark .bg-\[\#F7F6F3\] { background-color: #0a0c10 !important; }
+.dark .text-\[\#15171C\] { color: #f9fafb !important; }
+.dark .border-\[\#ECEAE5\] { border-color: #2f343f !important; }
+.dark .text-\[\#5B5E68\] { color: #a7b0c0 !important; }
+.dark .text-\[\#8A8D96\] { color: #7b8599 !important; }

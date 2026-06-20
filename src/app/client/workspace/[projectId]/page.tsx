@@ -5,39 +5,18 @@ import { WorkspaceRightPanel } from "@/components/workspace/WorkspaceRightPanel"
 import { createClient } from "@/utils/supabase/server";
 import { Search, Filter } from "lucide-react";
 
-// Mock Data for demonstration
-const mockApplicants: Applicant[] = [
-  {
-    id: "1",
-    name: "Nina Ellis",
-    location: "Los Angeles, CA",
-    hourlyRate: 134,
-    rating: 4.3,
-    reviewsCount: 15,
-    tags: ["Event Manager", "AV Setup"],
-    status: "available",
-  },
-  {
-    id: "2",
-    name: "Newton Scamander",
-    location: "Los Angeles, CA",
-    hourlyRate: 134,
-    rating: 4.8,
-    reviewsCount: 22,
-    tags: ["Audio Engineer", "Lighting"],
-    status: "hired",
-  },
-  {
-    id: "3",
-    name: "Maverick Pandey",
-    location: "Los Angeles, CA",
-    hourlyRate: 134,
-    rating: 5.0,
-    reviewsCount: 8,
-    tags: ["Project Manager"],
-    status: "available",
-  },
-];
+// Real Applicant interface based on DB
+export interface DBApplicant {
+  id: string; // application id
+  freelancer_id: string;
+  name: string;
+  location: string;
+  hourlyRate: number;
+  rating: number;
+  reviewsCount: number;
+  tags: string[];
+  status: string; // application status
+}
 
 export default async function WorkspacePage({
   params,
@@ -72,6 +51,8 @@ export default async function WorkspacePage({
     }
   };
 
+  let applicants: DBApplicant[] = [];
+  
   try {
     const { data: project } = await supabase
       .from('projects')
@@ -82,20 +63,80 @@ export default async function WorkspacePage({
     if (project) {
       projectDetails.title = project.title || projectDetails.title;
       projectDetails.stats.location = project.location || projectDetails.stats.location;
-      // Map other fields as needed
     }
+
+    // Fetch applications with freelancer profiles
+    const { data: appsData, error: appsError } = await supabase
+      .from('applications')
+      .select(`
+        id,
+        freelancer_id,
+        status,
+        freelancer_id
+      `)
+      .eq('project_id', projectId);
+
+    if (appsData && appsData.length > 0) {
+      const freelancerIds = appsData.map(a => a.freelancer_id);
+      
+      const { data: profiles } = await supabase
+        .from('freelancer_profiles')
+        .select('*')
+        .in('user_id', freelancerIds);
+        
+      const { data: stats } = await supabase
+        .from('freelancer_stats')
+        .select('*')
+        .in('freelancer_id', freelancerIds);
+
+      applicants = appsData.map(app => {
+        const profile = profiles?.find(p => p.user_id === app.freelancer_id);
+        const stat = stats?.find(s => s.freelancer_id === app.freelancer_id);
+        
+        return {
+          id: app.id,
+          freelancer_id: app.freelancer_id,
+          name: profile?.full_name || 'Unknown Freelancer',
+          location: profile?.location || 'Remote',
+          hourlyRate: Number(profile?.hourly_rate || 0),
+          rating: Number(stat?.average_rating || 0),
+          reviewsCount: Number(stat?.total_reviews || 0),
+          tags: profile?.skills || [],
+          status: app.status
+        };
+      });
+    }
+
+    // Fetch contracts for this project
+    const { data: contractsData } = await supabase
+      .from('contracts')
+      .select(`
+        *,
+        freelancer:users!contracts_freelancer_id_fkey(
+          freelancer_profiles(full_name, hourly_rate)
+        )
+      `)
+      .eq('project_id', projectId);
+      
+    if (contractsData) {
+      projectDetails.stats.hiredContracts = contractsData.length;
+      // We'll pass contractsData down to render them
+    }
+
+    var projectContracts = contractsData || [];
+
   } catch (error) {
-    console.error("Supabase project fetch error, using mock data", error);
+    console.error("Supabase data fetch error", error);
   }
 
   // Define tabs
   const tabs = [
     { id: "overview", label: "OVERVIEW" },
-    { id: "applicants", label: "FREELANCER", count: 18 },
+    { id: "applicants", label: "FREELANCER", count: applicants.length },
     { id: "questions", label: "QUESTIONS" },
     { id: "offers", label: "OFFERS" },
     { id: "interview", label: "INTERVIEW" },
-    { id: "contracts", label: "CONTRACTS", count: 7 },
+    { id: "contracts", label: "CONTRACTS", count: projectDetails.stats.hiredContracts },
     { id: "payment", label: "PAYMENT" },
     { id: "compliance", label: "COMPLIANCE" },
   ];
@@ -138,17 +179,66 @@ export default async function WorkspacePage({
 
               {/* Grid of Applicant Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {mockApplicants.map(applicant => (
-                  <ApplicantCard key={applicant.id} applicant={applicant} />
-                ))}
-                {mockApplicants.map(applicant => (
-                  <ApplicantCard key={applicant.id + "_copy"} applicant={{...applicant, id: applicant.id + "_copy"}} />
-                ))}
+                {applicants.length > 0 ? (
+                  applicants.map(applicant => (
+                    <ApplicantCard key={applicant.id} applicant={applicant} />
+                  ))
+                ) : (
+                  <div className="col-span-full py-12 text-center text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                    <p>No applicants yet for this project.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {activeTab !== "applicants" && (
+          {activeTab === "contracts" && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-gray-900">Project Contracts</h2>
+              {projectContracts && projectContracts.length > 0 ? (
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="py-3 px-4 font-semibold text-gray-600 text-sm">Freelancer</th>
+                        <th className="py-3 px-4 font-semibold text-gray-600 text-sm">Amount</th>
+                        <th className="py-3 px-4 font-semibold text-gray-600 text-sm">Status</th>
+                        <th className="py-3 px-4 font-semibold text-gray-600 text-sm">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {projectContracts.map((contract: any) => (
+                        <tr key={contract.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium text-gray-900">
+                            {contract.freelancer?.freelancer_profiles?.[0]?.full_name || 'Unknown Freelancer'}
+                          </td>
+                          <td className="py-3 px-4">${contract.amount}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              contract.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                              contract.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {contract.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 text-sm">
+                            {new Date(contract.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+                  <p className="text-gray-500">No contracts have been created for this project yet.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab !== "applicants" && activeTab !== "contracts" && (
             <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-dashed border-gray-300">
               <div className="text-gray-400 mb-2">
                 <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
