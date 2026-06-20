@@ -8,7 +8,10 @@ export default async function Home() {
 
   if (user) {
     const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (userData?.role === 'freelancer') {
+    
+    if (userData?.role === 'admin') {
+      redirect('/admin')
+    } else if (userData?.role === 'freelancer') {
       redirect('/freelancer/dashboard')
     } else if (userData?.role === 'client') {
       redirect('/client/dashboard')

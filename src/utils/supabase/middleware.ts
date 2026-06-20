@@ -55,7 +55,8 @@ export async function updateSession(request: NextRequest) {
     // 2. If accessing auth routes while logged in, redirect to the right place
     if (isAuthRoute) {
       const url = request.nextUrl.clone()
-      if (role === 'freelancer') url.pathname = '/freelancer/dashboard'
+      if (role === 'admin') url.pathname = '/admin'
+      else if (role === 'freelancer') url.pathname = '/freelancer/dashboard'
       else if (role === 'client') url.pathname = '/client/dashboard'
       else url.pathname = '/onboarding/role'
       return NextResponse.redirect(url)
@@ -122,20 +123,29 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // 4. Protect client dashboard from non-clients
-    if (pathname.startsWith('/client/')) {
-      if (role !== 'client') {
+    // 4. Protect admin dashboard from non-admins
+    if (pathname.startsWith('/admin')) {
+      if (role !== 'admin') {
         const url = request.nextUrl.clone()
-        url.pathname = role === 'freelancer' ? '/freelancer/dashboard' : '/onboarding/role'
+        url.pathname = '/'
         return NextResponse.redirect(url)
       }
     }
 
-    // 5. Protect freelancer dashboard from non-freelancers
+    // 5. Protect client dashboard from non-clients
+    if (pathname.startsWith('/client/')) {
+      if (role !== 'client') {
+        const url = request.nextUrl.clone()
+        url.pathname = role === 'freelancer' ? '/freelancer/dashboard' : (role === 'admin' ? '/admin' : '/onboarding/role')
+        return NextResponse.redirect(url)
+      }
+    }
+
+    // 6. Protect freelancer dashboard from non-freelancers
     if (pathname.startsWith('/freelancer/')) {
       if (role !== 'freelancer') {
         const url = request.nextUrl.clone()
-        url.pathname = role === 'client' ? '/client/dashboard' : '/onboarding/role'
+        url.pathname = role === 'client' ? '/client/dashboard' : (role === 'admin' ? '/admin' : '/onboarding/role')
         return NextResponse.redirect(url)
       }
     }
