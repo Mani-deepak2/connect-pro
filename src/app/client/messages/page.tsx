@@ -1,24 +1,80 @@
 "use client"
-import { useState } from 'react'
-import { Search, MoreVertical, Phone, Video, Paperclip, Send, Image as ImageIcon, Smile, Check, CheckCheck } from 'lucide-react'
-
-const MOCK_CONVERSATIONS = [
-  { id: 1, name: 'Alex Rivera', role: 'Full Stack Engineer', project: 'E-commerce Redesign', lastMessage: 'I have pushed the latest commits to the staging branch.', time: '10:42 AM', unread: 2, online: true, img: 'A', bg: 'bg-blue-100', text: 'text-blue-700' },
-  { id: 2, name: 'Emily Chen', role: 'UI/UX Designer', project: 'Mobile App Design', lastMessage: 'Here is the Figma link for the final review.', time: 'Yesterday', unread: 0, online: false, img: 'E', bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  { id: 3, name: 'David Kim', role: 'Backend Developer', project: 'API Gateway Build', lastMessage: 'The database migration is complete.', time: 'Tuesday', unread: 0, online: true, img: 'D', bg: 'bg-purple-100', text: 'text-purple-700' },
-  { id: 4, name: 'Sarah Smith', role: 'Mobile Developer', project: 'Fitness Tracking App', lastMessage: 'Can we schedule a quick call tomorrow?', time: 'Monday', unread: 0, online: false, img: 'S', bg: 'bg-orange-100', text: 'text-orange-700' },
-]
-
-const MOCK_CHAT_HISTORY = [
-  { id: 1, sender: 'Alex Rivera', isMe: false, message: 'Hi there! I just wanted to update you on the progress.', time: '10:30 AM', status: 'read' },
-  { id: 2, sender: 'Me', isMe: true, message: 'Great, thanks Alex. How is the payment integration coming along?', time: '10:32 AM', status: 'read' },
-  { id: 3, sender: 'Alex Rivera', isMe: false, message: 'Almost done. I ran into a small issue with the webhook testing, but it\'s resolved now.', time: '10:35 AM', status: 'read' },
-  { id: 4, sender: 'Alex Rivera', isMe: false, message: 'I have pushed the latest commits to the staging branch.', time: '10:42 AM', status: 'read' },
-]
+import { useState, useEffect } from 'react'
+import { Search, MoreVertical, Phone, Video, Paperclip, Send, Image as ImageIcon, Smile, Check, CheckCheck, Loader2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
 
 export default function Messages() {
-  const [activeChat, setActiveChat] = useState(MOCK_CONVERSATIONS[0])
+  const [conversations, setConversations] = useState<any[]>([])
+  const [messages, setMessages] = useState<any[]>([])
+  const [activeChat, setActiveChat] = useState<any>(null)
   const [messageText, setMessageText] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchConversations()
+  }, [])
+
+  const fetchConversations = async () => {
+    setIsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: convs } = await supabase
+      .from('conversations')
+      .select('*, freelancer:users!conversations_freelancer_id_fkey(full_name), project:projects(title)')
+      .eq('client_id', user.id)
+      .order('updated_at', { ascending: false })
+
+    if (convs) {
+      const mappedConvs = convs.map((c: any) => ({
+        id: c.id,
+        name: c.freelancer?.full_name || 'Unknown',
+        role: 'Freelancer',
+        project: c.project?.title || 'General',
+        lastMessage: 'Tap to view messages...',
+        time: new Date(c.updated_at).toLocaleDateString(),
+        unread: 0,
+        online: false,
+        img: c.freelancer?.full_name?.charAt(0) || 'U',
+        bg: 'bg-teal-100',
+        text: 'text-teal-700'
+      }))
+      setConversations(mappedConvs)
+      if (mappedConvs.length > 0) {
+        setActiveChat(mappedConvs[0])
+        fetchMessages(mappedConvs[0].id)
+      }
+    }
+    setIsLoading(false)
+  }
+
+  const fetchMessages = async (chatId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', chatId)
+      .order('created_at', { ascending: true })
+
+    if (msgs) {
+      setMessages(msgs.map((m: any) => ({
+        id: m.id,
+        isMe: m.sender_id === user.id,
+        message: m.content,
+        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: m.is_read ? 'read' : 'sent'
+      })))
+    }
+  }
+
+  const handleChatClick = (chat: any) => {
+    setActiveChat(chat)
+    fetchMessages(chat.id)
+  }
 
   return (
     <div className="flex h-full bg-white overflow-hidden">
@@ -39,12 +95,16 @@ export default function Messages() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {MOCK_CONVERSATIONS.map((chat) => (
+          {isLoading ? (
+            <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-teal-600" /></div>
+          ) : conversations.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">No conversations found.</div>
+          ) : conversations.map((chat) => (
             <button 
               key={chat.id}
-              onClick={() => setActiveChat(chat)}
+              onClick={() => handleChatClick(chat)}
               className={`w-full text-left p-4 flex gap-4 transition-colors border-b border-gray-50 ${
-                activeChat.id === chat.id ? 'bg-teal-50/50' : 'hover:bg-gray-50'
+                activeChat?.id === chat.id ? 'bg-teal-50/50' : 'hover:bg-gray-50'
               }`}
             >
               <div className="relative shrink-0">
@@ -85,21 +145,25 @@ export default function Messages() {
         {/* Chat Header */}
         <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-full ${activeChat.bg} ${activeChat.text} flex items-center justify-center font-bold`}>
-              {activeChat.img}
-            </div>
-            <div>
-              <h2 className="font-bold text-gray-900">{activeChat.name}</h2>
-              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                {activeChat.online ? (
-                  <><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Online</>
-                ) : (
-                  <><span className="w-2 h-2 rounded-full bg-gray-400"></span> Offline</>
-                )}
-                <span className="mx-1">•</span>
-                <span>{activeChat.role}</span>
-              </p>
-            </div>
+            {activeChat && (
+              <>
+                <div className={`w-10 h-10 rounded-full ${activeChat.bg} ${activeChat.text} flex items-center justify-center font-bold`}>
+                  {activeChat.img}
+                </div>
+                <div>
+                  <h2 className="font-bold text-gray-900">{activeChat.name}</h2>
+                  <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                    {activeChat.online ? (
+                      <><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Online</>
+                    ) : (
+                      <><span className="w-2 h-2 rounded-full bg-gray-400"></span> Offline</>
+                    )}
+                    <span className="mx-1">•</span>
+                    <span>{activeChat.role}</span>
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           
           <div className="flex items-center gap-3">
@@ -128,9 +192,9 @@ export default function Messages() {
           </div>
           
           <div className="space-y-6">
-            {MOCK_CHAT_HISTORY.map((msg) => (
+            {messages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                {!msg.isMe && (
+                {!msg.isMe && activeChat && (
                   <div className={`w-8 h-8 rounded-full ${activeChat.bg} ${activeChat.text} flex items-center justify-center font-bold text-xs mr-3 mt-auto shrink-0`}>
                     {activeChat.img}
                   </div>
@@ -159,9 +223,6 @@ export default function Messages() {
 
         {/* Typing Indicator */}
         <div className="h-6 px-6 bg-[#f8fafc]">
-          {activeChat.id === 1 && (
-            <p className="text-xs text-gray-400 italic">Alex Rivera is typing...</p>
-          )}
         </div>
 
         {/* Input Area */}

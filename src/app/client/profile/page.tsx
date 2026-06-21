@@ -241,7 +241,7 @@ export default function ClientProfile() {
               <div className="space-y-3">
                 {profile?.linkedin_url ? (
                   <a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group">
-                    <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+                    <Globe className="w-5 h-5 text-[#0A66C2]" />
                     <span className="text-sm font-medium text-gray-700 group-hover:text-teal-700">LinkedIn Profile</span>
                     <ExternalLink className="w-4 h-4 ml-auto text-gray-400 group-hover:text-teal-600" />
                   </a>
@@ -249,7 +249,7 @@ export default function ClientProfile() {
                 
                 {profile?.twitter_url ? (
                   <a href={profile.twitter_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group">
-                    <Twitter className="w-5 h-5 text-[#1DA1F2]" />
+                    <Globe className="w-5 h-5 text-[#1DA1F2]" />
                     <span className="text-sm font-medium text-gray-700 group-hover:text-teal-700">Twitter (X) Profile</span>
                     <ExternalLink className="w-4 h-4 ml-auto text-gray-400 group-hover:text-teal-600" />
                   </a>

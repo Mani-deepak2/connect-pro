@@ -37,14 +37,7 @@ export default function FindWork() {
     setIsLoading(false)
   }
 
-  // Fallback to MOCK data ONLY if the database returns literally 0 projects.
-  // This satisfies the "never display blank content" requirement if the DB is unpopulated.
-  const MOCK_JOBS = [
-    { id: '1', title: 'Senior React Developer for Fintech SaaS', company: 'Acme Corp', hourly_rate_min: 65, hourly_rate_max: 85, budget_type: 'hourly', duration: '3-6 months', experience_level: 'expert', verified: true, spent: '$10k+', location: 'United States', created_at: new Date().toISOString(), description: 'We are looking for an experienced React developer to help us rebuild our core dashboard. You must have experience with Next.js, TailwindCSS, and complex state management.', required_skills: ['React', 'Next.js', 'TypeScript', 'TailwindCSS'] },
-    { id: '2', title: 'Complete UX/UI Redesign for Mobile App', company: 'HealthFlow', fixed_budget: 5000, budget_type: 'fixed', duration: '1 month', experience_level: 'intermediate', verified: true, spent: '$2k+', location: 'Canada', created_at: new Date().toISOString(), description: 'Need a complete redesign of our fitness tracking app. We will provide wireframes and brand guidelines. Deliverables should be in Figma.', required_skills: ['Figma', 'UI Design', 'Mobile App', 'Prototyping'] },
-  ]
-
-  const displayProjects = (projects.length > 0 ? projects : MOCK_JOBS).filter(job => {
+  const displayProjects = projects.filter(job => {
     // Search Term
     if (searchTerm && !job.title.toLowerCase().includes(searchTerm.toLowerCase()) && !job.description.toLowerCase().includes(searchTerm.toLowerCase())) return false
     
@@ -150,7 +143,7 @@ export default function FindWork() {
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 mb-4 font-medium">
                   <span className="flex items-center gap-1.5 text-gray-900">
                     {job.budget_type === 'hourly' ? <Clock className="w-4 h-4 text-gray-400" /> : <DollarSign className="w-4 h-4 text-gray-400" />}
-                    {job.budget_type === 'hourly' ? `$${job.hourly_rate_min} - $${job.hourly_rate_max}/hr` : `$${job.fixed_budget}`} 
+                    {job.budget_type === 'hourly' ? `$${job.budget_amount}/hr` : `$${job.budget_amount}`} 
                     <span className="text-gray-400 font-normal capitalize">({job.budget_type})</span>
                   </span>
                   <span className="capitalize">{job.experience_level} Level</span>

@@ -1,7 +1,8 @@
 "use client"
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Search, Filter, Download, FileText, CheckCircle, Clock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { createClient } from '@/utils/supabase/client'
 
 const monthlySpendingData = [
   { name: 'Jan', amount: 4000 },
@@ -13,19 +14,44 @@ const monthlySpendingData = [
   { name: 'Jul', amount: 3490 },
 ]
 
-const MOCK_TRANSACTIONS = [
-  { id: 'INV-2026-891', date: '2026-06-15', freelancer: 'Alex Rivera', project: 'E-commerce Redesign', amount: '$1,500.00', status: 'completed', type: 'Milestone 1' },
-  { id: 'INV-2026-892', date: '2026-06-10', freelancer: 'Emily Chen', project: 'Mobile App Design', amount: '$2,500.00', status: 'pending', type: 'Final Delivery' },
-  { id: 'INV-2026-893', date: '2026-06-05', freelancer: 'David Kim', project: 'API Gateway Build', amount: '$750.00', status: 'completed', type: 'Hourly (10 hrs)' },
-  { id: 'INV-2026-894', date: '2026-05-28', freelancer: 'Sarah Smith', project: 'Fitness Tracking App', amount: '$3,000.00', status: 'refunded', type: 'Cancellation' },
-  { id: 'INV-2026-895', date: '2026-05-20', freelancer: 'Alex Rivera', project: 'E-commerce Redesign', amount: '$1,500.00', status: 'completed', type: 'Upfront Deposit' },
-]
-
 export default function Payments() {
   const [activeTab, setActiveTab] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredTransactions = MOCK_TRANSACTIONS.filter(t => {
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchPayments()
+  }, [])
+
+  const fetchPayments = async () => {
+    setIsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('payments')
+      .select('*, freelancer:users!payments_freelancer_id_fkey(full_name), contract:contracts(project:projects(title))')
+      .eq('client_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (data) {
+      setTransactions(data.map((p: any) => ({
+        id: p.id.split('-')[0],
+        date: new Date(p.created_at).toLocaleDateString(),
+        freelancer: p.freelancer?.full_name || 'Unknown',
+        project: p.contract?.project?.title || 'Unknown Project',
+        amount: `$${p.amount.toFixed(2)}`,
+        status: p.status,
+        type: 'Payment'
+      })))
+    }
+    setIsLoading(false)
+  }
+
+  const filteredTransactions = transactions.filter(t => {
     if (activeTab !== 'all' && t.status !== activeTab) return false
     if (searchTerm && !t.freelancer.toLowerCase().includes(searchTerm.toLowerCase()) && !t.id.toLowerCase().includes(searchTerm.toLowerCase())) return false
     return true
@@ -98,7 +124,7 @@ export default function Payments() {
               <Tooltip 
                 cursor={{fill: '#f3f4f6'}}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                formatter={(value: number) => [`$${value}`, 'Amount']}
+                formatter={(value: any) => [`$${value}`, 'Amount']}
               />
               <Bar dataKey="amount" fill="#0d9488" radius={[6, 6, 0, 0]} />
             </BarChart>

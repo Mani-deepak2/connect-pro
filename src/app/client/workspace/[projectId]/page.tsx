@@ -52,7 +52,8 @@ export default async function WorkspacePage({
   };
 
   let applicants: DBApplicant[] = [];
-  
+  let projectContracts: any[] = [];
+
   try {
     const { data: project } = await supabase
       .from('projects')
@@ -123,7 +124,7 @@ export default async function WorkspacePage({
       // We'll pass contractsData down to render them
     }
 
-    var projectContracts = contractsData || [];
+    projectContracts = contractsData || [];
 
   } catch (error) {
     console.error("Supabase data fetch error", error);

@@ -32,15 +32,7 @@ export default function Applications() {
     setIsLoading(false)
   }
 
-  // Fallback to MOCK data ONLY if the database returns 0 proposals.
-  const MOCK_PROPOSALS = [
-    { id: '1', project: { title: 'Senior React Developer for Fintech SaaS', client: { company_name: 'Acme Corp' } }, bid_amount: 65, status: 'interviewing', created_at: new Date().toISOString(), unread: 1, proposal: 'Hi Acme team, I have 5 years of experience building React/Next.js dashboards in the fintech space...' },
-    { id: '2', project: { title: 'Complete UX/UI Redesign for Mobile App', client: { company_name: 'HealthFlow' } }, bid_amount: 5000, status: 'pending', created_at: new Date().toISOString(), unread: 0, proposal: 'I have attached my Figma portfolio featuring 3 recent mobile app redesigns. I can deliver this within...' },
-    { id: '3', project: { title: 'Backend API Development (Node.js)', client: { company_name: 'TechStart Inc.' } }, bid_amount: 50, status: 'accepted', created_at: new Date().toISOString(), unread: 0, proposal: 'I am an AWS Certified backend engineer. I can build your REST APIs using Express and Postgres...' },
-    { id: '4', project: { title: 'WordPress Theme Customization', client: { company_name: 'BloggerPro' } }, bid_amount: 500, status: 'rejected', created_at: new Date().toISOString(), unread: 0, proposal: 'I can customize the theme exactly to your specifications...' },
-  ]
-
-  const displayProposals = proposals.length > 0 ? proposals : MOCK_PROPOSALS
+  const displayProposals = proposals
 
   const filteredProposals = displayProposals.filter(p => {
     if (activeTab === 'active') return ['pending', 'interviewing'].includes(p.status)

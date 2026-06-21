@@ -1,16 +1,11 @@
 "use client"
 import { useState } from 'react'
-import { Calendar as CalendarIcon, Clock, Video, Users, Plus, ChevronLeft, ChevronRight, MoreHorizontal, MapPin } from 'lucide-react'
-
-const MOCK_INTERVIEWS = [
-  { id: 1, title: 'Technical Interview', candidate: 'Alex Rivera', role: 'Full Stack Engineer', date: '2026-06-18', time: '10:00 AM - 11:00 AM', status: 'upcoming', type: 'Video Call', link: 'https://meet.google.com/abc-defg-hij', img: 'A', bg: 'bg-blue-100', text: 'text-blue-700' },
-  { id: 2, title: 'Portfolio Review', candidate: 'Emily Chen', role: 'UI/UX Designer', date: '2026-06-19', time: '2:00 PM - 2:45 PM', status: 'upcoming', type: 'Video Call', link: 'https://zoom.us/j/123456789', img: 'E', bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  { id: 3, title: 'Initial Screening', candidate: 'David Kim', role: 'Backend Developer', date: '2026-06-17', time: '11:00 AM - 11:30 AM', status: 'completed', type: 'Phone Call', link: '+1 (555) 123-4567', img: 'D', bg: 'bg-purple-100', text: 'text-purple-700' },
-]
+import { Calendar as CalendarIcon, Clock, Video, Users, Plus, ChevronLeft, ChevronRight, MoreHorizontal, MapPin, FileText } from 'lucide-react'
 
 export default function Interviews() {
   const [currentDate, setCurrentDate] = useState(new Date('2026-06-17'))
   const [activeTab, setActiveTab] = useState('upcoming')
+  const [interviews, setInterviews] = useState<any[]>([])
 
   const daysInMonth = 30 // Simplified for mock
   const startDay = 1 // Monday
@@ -131,7 +126,7 @@ export default function Interviews() {
 
             <div className="flex-1 p-6">
               <div className="space-y-4">
-                {MOCK_INTERVIEWS.filter(i => activeTab === 'all' || (activeTab === 'upcoming' && i.status === 'upcoming') || (activeTab === 'past' && i.status === 'completed')).map(interview => (
+                {interviews.filter(i => activeTab === 'all' || (activeTab === 'upcoming' && i.status === 'upcoming') || (activeTab === 'past' && i.status === 'completed')).map(interview => (
                   <div key={interview.id} className="border border-gray-200 rounded-2xl p-5 hover:border-teal-200 hover:shadow-md transition-all group relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-teal-500 rounded-l-2xl"></div>
                     

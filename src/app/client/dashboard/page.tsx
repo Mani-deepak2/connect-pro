@@ -23,23 +23,13 @@ export default function ClientDashboard() {
   const [clientName, setClientName] = useState<string>('')
   const [recommendedFreelancers, setRecommendedFreelancers] = useState<any[]>([])
   const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [applicationsCount, setApplicationsCount] = useState(0)
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [totalSpending, setTotalSpending] = useState(0)
   const router = useRouter()
   const supabase = createClient()
 
-  // Auto-Admin script for admin22006@gmail.com
-  useEffect(() => {
-    const makeAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user && user.email === 'admin22006@gmail.com') {
-        const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') {
-          await supabase.from('users').update({ role: 'admin' }).eq('id', user.id)
-          router.push('/admin')
-        }
-      }
-    }
-    makeAdmin()
-  }, [])
+  // Removed Auto-Admin script for security
 
   useEffect(() => {
     fetchProjects()
@@ -65,11 +55,12 @@ export default function ClientDashboard() {
       { count: cCount },
       { data: profileData },
       { data: freelancersData },
-      { data: activityData }
+      { data: activityData },
+      { data: creditsData }
     ] = await Promise.all([
       supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('client_id', user.id),
       supabase.from('client_profiles').select('company_name').eq('user_id', user.id).single(),
-      supabase.from('freelancer_profiles').select('*').limit(3),
+      supabase.from('freelancer_profiles').select('*').limit(5),
       supabase.from('applications')
         .select(`
           id,
@@ -80,13 +71,27 @@ export default function ClientDashboard() {
         `)
         .eq('projects.client_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(4)
+        .limit(4),
+      supabase.from('user_credits').select('credits').eq('user_id', user.id).maybeSingle()
     ])
 
     if (cCount !== null) setContractsCount(cCount)
     if (profileData) setClientName(profileData.company_name)
     if (freelancersData) setRecommendedFreelancers(freelancersData)
     if (activityData) setRecentActivity(activityData)
+    if (creditsData) setWalletBalance(creditsData.credits || 0)
+
+    if (data && data.length > 0) {
+      const projectIds = data.map(p => p.id)
+      const { count: aCount } = await supabase.from('applications').select('*', { count: 'exact', head: true }).in('project_id', projectIds)
+      if (aCount !== null) setApplicationsCount(aCount)
+      
+      const { data: contractsData } = await supabase.from('contracts').select('budget').eq('client_id', user.id)
+      if (contractsData) {
+        const spent = contractsData.reduce((acc, curr) => acc + (curr.budget || 0), 0)
+        setTotalSpending(spent)
+      }
+    }
 
     setIsLoading(false)
   }
@@ -127,12 +132,12 @@ export default function ClientDashboard() {
         {[
           { label: 'Total Projects', value: projects.length.toString(), icon: Briefcase, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Active Projects', value: projects.filter(p => p.status === 'open' || p.status === 'in_progress').length.toString(), icon: Activity, color: 'text-orange-600', bg: 'bg-orange-50' },
-          { label: 'Applications', value: '124', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Applications', value: applicationsCount.toString(), icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { label: 'Active Contracts', value: contractsCount.toString(), icon: FileText, color: 'text-purple-600', bg: 'bg-purple-50' },
-          { label: 'Closed Projects', value: projects.filter(p => p.status === 'completed' || p.status === 'closed').length.toString(), icon: CheckCircle, color: 'text-gray-600', bg: 'bg-gray-100' },
-          { label: 'Drafts', value: projects.filter(p => p.status === 'draft').length.toString(), icon: FileText, color: 'text-slate-600', bg: 'bg-slate-100' },
-          { label: 'Total Spending', value: '$12,450', icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Wallet Balance', value: '$3,550', icon: Wallet, color: 'text-teal-600', bg: 'bg-teal-50' },
+          { label: 'Closed Projects', value: projects.filter(p => p.status === 'completed' || p.status === 'cancelled').length.toString(), icon: CheckCircle, color: 'text-gray-600', bg: 'bg-gray-100' },
+          { label: 'Drafts', value: '0', icon: FileText, color: 'text-slate-600', bg: 'bg-slate-100' },
+          { label: 'Total Spending', value: `$${totalSpending.toLocaleString()}`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Wallet Balance', value: `${walletBalance} Credits`, icon: Wallet, color: 'text-teal-600', bg: 'bg-teal-50' },
         ].map((stat, i) => (
           <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group cursor-pointer">
             <div className="flex items-center gap-4 mb-3">
@@ -147,7 +152,17 @@ export default function ClientDashboard() {
       </div>
 
       {/* Analytics Charts */}
-      <DashboardCharts hiringData={useMemo(() => {
+      <DashboardCharts 
+        spendingData={useMemo(() => {
+          // Dynamic Spending Data from Total Spending 
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+          const data = months.slice(0, new Date().getMonth() + 1).map(m => ({ name: m, amount: 0 }))
+          if (data.length > 0) {
+            data[data.length - 1].amount = totalSpending
+          }
+          return data.slice(-7).length > 0 ? data.slice(-7) : undefined
+        }, [totalSpending])}
+        hiringData={useMemo(() => {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         const data = months.slice(0, new Date().getMonth() + 1).map(m => ({ name: m, hires: 0 }))
         projects.forEach(p => {

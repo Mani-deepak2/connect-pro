@@ -36,15 +36,7 @@ export default function Contracts() {
     setIsLoading(false)
   }
 
-  // Fallback to MOCK data ONLY if the database returns 0 contracts.
-  const MOCK_CONTRACTS = [
-    { id: 'CON-2026-891', freelancer: { full_name: 'Alex Rivera' }, project: { title: 'E-commerce Redesign', budget_type: 'hourly' }, created_at: '2026-06-01', updated_at: '2026-12-01', status: 'active', amount: 65 },
-    { id: 'CON-2026-742', freelancer: { full_name: 'Emily Chen' }, project: { title: 'Mobile App Design', budget_type: 'fixed' }, created_at: '2026-05-15', updated_at: '2026-08-15', status: 'completed', amount: 5000 },
-    { id: 'CON-2026-921', freelancer: { full_name: 'David Kim' }, project: { title: 'API Gateway Build', budget_type: 'hourly' }, created_at: '2026-06-20', updated_at: '2026-10-20', status: 'pending', amount: 75 },
-    { id: 'CON-2026-618', freelancer: { full_name: 'Sarah Smith' }, project: { title: 'Fitness Tracking App', budget_type: 'fixed' }, created_at: '2026-03-01', updated_at: '2026-05-01', status: 'cancelled', amount: 12000 },
-  ]
-
-  const displayContracts = contracts.length > 0 ? contracts : MOCK_CONTRACTS
+  const displayContracts = contracts
 
   const filteredContracts = displayContracts.filter(contract => {
     if (activeTab !== 'all' && contract.status !== activeTab) return false

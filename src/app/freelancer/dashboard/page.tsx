@@ -98,7 +98,7 @@ export default function FreelancerDashboard() {
                   <Tooltip 
                     cursor={{fill: '#f3f4f6'}}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`$${value}`, 'Earned']}
+                    formatter={(value: any) => [`$${value}`, 'Earned']}
                   />
                   <Bar dataKey="amount" fill="#0d9488" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -160,7 +160,6 @@ export default function FreelancerDashboard() {
                   <button className="flex-1 px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">Decline</button>
                 </div>
               </div>
->>>>>>> origin/Client-Dashboard
             </div>
           </div>
 

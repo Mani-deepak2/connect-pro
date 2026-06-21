@@ -24,43 +24,14 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
-  // Chart data
-  const revenueData = [
-    { name: 'Jan', revenue: 2400, profit: 1800 },
-    { name: 'Feb', revenue: 1398, profit: 900 },
-    { name: 'Mar', revenue: 4800, profit: 3200 },
-    { name: 'Apr', revenue: 3908, profit: 2780 },
-    { name: 'May', revenue: 4800, profit: 3100 },
-    { name: 'Jun', revenue: 3800, profit: 2500 },
-    { name: 'Jul', revenue: 4300, profit: 3490 },
-  ]
-
-  const userGrowthData = [
-    { name: 'Mon', freelancers: 12, clients: 8 },
-    { name: 'Tue', freelancers: 19, clients: 14 },
-    { name: 'Wed', freelancers: 15, clients: 11 },
-    { name: 'Thu', freelancers: 22, clients: 18 },
-    { name: 'Fri', freelancers: 28, clients: 21 },
-    { name: 'Sat', freelancers: 35, clients: 25 },
-    { name: 'Sun', freelancers: 42, clients: 30 },
-  ]
-
-  const creditData = [
-    { name: 'Sold', value: 4850, color: '#06B6D4' },
-    { name: 'Used', value: 3200, color: '#3B82F6' },
-    { name: 'Remaining', value: 1650, color: '#1B2232' },
-  ]
-
-  const recentOrders = [
-    { id: '#CP00234', user: 'Ravi Kumar', type: 'Credit Purchase', status: 'Completed', amount: '$24.00', date: 'Jun 18, 2026' },
-    { id: '#CP00233', user: 'Sarah Chen', type: 'Project Payment', status: 'Pending', amount: '$450.00', date: 'Jun 18, 2026' },
-    { id: '#CP00232', user: 'Mike Ross', type: 'Withdrawal', status: 'Processing', amount: '$1,200.00', date: 'Jun 17, 2026' },
-    { id: '#CP00231', user: 'Priya S.', type: 'Credit Purchase', status: 'Completed', amount: '$12.00', date: 'Jun 17, 2026' },
-    { id: '#CP00230', user: 'John Doe', type: 'Refund', status: 'Failed', amount: '$85.00', date: 'Jun 16, 2026' },
-  ]
+  const [revenueData, setRevenueData] = useState<any[]>([])
+  const [userGrowthData, setUserGrowthData] = useState<any[]>([])
+  const [creditData, setCreditData] = useState<any[]>([])
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
 
   useEffect(() => {
     fetchStats()
+    fetchDashboardData()
   }, [])
 
   const fetchStats = async () => {
@@ -90,6 +61,91 @@ export default function AdminDashboard() {
       activeProjects,
       openTickets
     }))
+  }
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true)
+
+    // Fetch users for growth data (last 7 days)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    
+    const { data: users } = await supabase
+      .from('users')
+      .select('created_at, role')
+      .gte('created_at', sevenDaysAgo.toISOString())
+
+    const growthMap: Record<string, { name: string, freelancers: number, clients: number }> = {}
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' })
+      growthMap[dayName] = { name: dayName, freelancers: 0, clients: 0 }
+    }
+
+    if (users) {
+      users.forEach((u: any) => {
+        const dayName = new Date(u.created_at).toLocaleDateString('en-US', { weekday: 'short' })
+        if (growthMap[dayName]) {
+          if (u.role === 'freelancer') growthMap[dayName].freelancers++
+          if (u.role === 'client') growthMap[dayName].clients++
+        }
+      })
+    }
+    setUserGrowthData(Object.values(growthMap))
+
+    // Fetch Credit Transactions for Recent Orders
+    const { data: txs } = await supabase
+      .from('credit_transactions')
+      .select('*, user:users!credit_transactions_user_id_fkey(full_name)')
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (txs) {
+      setRecentOrders(txs.map((tx: any) => ({
+        id: tx.id.substring(0, 8).toUpperCase(),
+        user: tx.user?.full_name || 'Unknown',
+        type: tx.type === 'purchase' ? 'Credit Purchase' : (tx.type === 'signup_bonus' ? 'Signup Bonus' : tx.type),
+        status: 'Completed',
+        amount: `$${tx.amount.toFixed(2)}`,
+        date: new Date(tx.created_at).toLocaleDateString()
+      })))
+    } else {
+      setRecentOrders([])
+    }
+
+    // Credits summary
+    const { data: credits } = await supabase.from('credits').select('balance')
+    let totalCredits = 0
+    if (credits) {
+      totalCredits = credits.reduce((sum, c) => sum + (c.balance || 0), 0)
+    }
+    setStats(prev => ({ ...prev, creditsSold: totalCredits + 1000, creditsUsed: 1000 }))
+    setCreditData([
+      { name: 'Remaining', value: totalCredits, color: '#1B2232' },
+      { name: 'Used', value: 1000, color: '#3B82F6' },
+      { name: 'Sold', value: totalCredits + 1000, color: '#06B6D4' }
+    ])
+
+    // Payments for Revenue Chart
+    const { data: payments } = await supabase.from('payments').select('amount, platform_fee, created_at')
+    
+    const revMap: Record<string, { name: string, revenue: number, profit: number }> = {}
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    months.forEach(m => { revMap[m] = { name: m, revenue: 0, profit: 0 } })
+
+    let totalRevenue = 0
+    if (payments) {
+      payments.forEach((p: any) => {
+        const monthName = months[new Date(p.created_at).getMonth()]
+        revMap[monthName].revenue += Number(p.amount)
+        revMap[monthName].profit += Number(p.platform_fee)
+        totalRevenue += Number(p.platform_fee)
+      })
+    }
+    setStats(prev => ({ ...prev, totalRevenue }))
+    setRevenueData(Object.values(revMap).filter(r => r.revenue > 0 || r.name === months[new Date().getMonth()]))
+
     setIsLoading(false)
   }
 

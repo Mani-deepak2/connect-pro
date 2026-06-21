@@ -104,6 +104,7 @@ export default function EditCompanyProfile() {
     if (insertError) {
       setError(insertError.message)
     } else {
+      router.refresh()
       setSuccessMsg('Profile updated successfully!')
       setTimeout(() => setSuccessMsg(null), 3000)
     }

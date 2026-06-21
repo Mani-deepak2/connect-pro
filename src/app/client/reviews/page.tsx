@@ -1,16 +1,50 @@
 "use client"
-import { useState } from 'react'
-import { Star, MessageSquare, CheckCircle, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Star, MessageSquare, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-
-const MOCK_REVIEWS = [
-  { id: 1, freelancer: 'Sarah Jenkins', role: 'UX Designer', project: 'Mobile App Redesign', rating: 5, date: '2 days ago', feedback: 'Sarah was incredible to work with. She delivered the Figma files 3 days ahead of schedule and the designs were flawless.', response: null },
-  { id: 2, freelancer: 'David Chen', role: 'React Developer', project: 'Admin Dashboard', rating: 4, date: '1 week ago', feedback: 'Good technical skills. Communication could have been slightly more frequent, but the end product is solid.', response: 'Thanks for the feedback! I will ensure more frequent updates on future projects.' },
-  { id: 3, freelancer: 'Elena Rodriguez', role: 'Backend Engineer', project: 'API Gateway', rating: 5, date: '1 month ago', feedback: 'Elena built a highly scalable architecture that handled our traffic spike perfectly. Highly recommend.', response: null },
-]
+import { createClient } from '@/utils/supabase/client'
 
 export default function Reviews() {
   const [activeTab, setActiveTab] = useState('given')
+  const [reviewsGiven, setReviewsGiven] = useState<any[]>([])
+  const [reviewsReceived, setReviewsReceived] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchReviews()
+  }, [])
+
+  const fetchReviews = async () => {
+    setIsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Reviews given by the client
+    const { data: given } = await supabase
+      .from('reviews')
+      .select('*, reviewee:users!reviews_reviewee_id_fkey(full_name, role), contract:contracts(project:projects(title))')
+      .eq('reviewer_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (given) setReviewsGiven(given)
+
+    // Reviews received by the client
+    const { data: received } = await supabase
+      .from('reviews')
+      .select('*, reviewer:users!reviews_reviewer_id_fkey(full_name, role), contract:contracts(project:projects(title))')
+      .eq('reviewee_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (received) setReviewsReceived(received)
+
+    setIsLoading(false)
+  }
+
+  const averageRating = reviewsReceived.length > 0
+    ? (reviewsReceived.reduce((acc, rev) => acc + rev.rating, 0) / reviewsReceived.length).toFixed(1)
+    : '0.0'
 
   return (
     <div className="p-6 md:p-10 text-gray-900 h-full overflow-y-auto bg-gray-50/50">
@@ -26,15 +60,15 @@ export default function Reviews() {
         <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm flex flex-col items-center justify-center text-center">
           <h3 className="text-lg font-bold text-gray-900 mb-2">Company Average Rating</h3>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-5xl font-black text-gray-900 tracking-tighter">4.8</span>
+            <span className="text-5xl font-black text-gray-900 tracking-tighter">{averageRating}</span>
             <div className="flex flex-col items-start">
               <div className="flex">
-                {[1, 2, 3, 4, 5].map((s) => <Star key={s} className="w-4 h-4 text-yellow-400 fill-yellow-400" />)}
+                {[1, 2, 3, 4, 5].map((s) => <Star key={s} className={`w-4 h-4 ${s <= Number(averageRating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200 fill-gray-200'}`} />)}
               </div>
               <span className="text-sm font-medium text-gray-500">out of 5</span>
             </div>
           </div>
-          <p className="text-sm text-gray-500 mt-2">Based on <span className="font-bold text-gray-900">24 reviews</span> from freelancers.</p>
+          <p className="text-sm text-gray-500 mt-2">Based on <span className="font-bold text-gray-900">{reviewsReceived.length} reviews</span> from freelancers.</p>
         </div>
 
         {/* Breakdown */}
@@ -84,19 +118,23 @@ export default function Reviews() {
         </div>
 
         <div className="divide-y divide-gray-100">
-          {activeTab === 'given' && MOCK_REVIEWS.map((review) => (
+          {isLoading ? (
+            <div className="p-12 text-center text-gray-500 flex justify-center">
+              <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
+            </div>
+          ) : activeTab === 'given' && reviewsGiven.length > 0 ? reviewsGiven.map((review) => (
             <div key={review.id} className="p-6 md:p-8 hover:bg-gray-50/50 transition-colors">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 shrink-0">
-                    {review.freelancer.charAt(0)}
+                    {review.reviewee?.full_name?.charAt(0) || 'U'}
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-900 hover:text-teal-600 transition-colors cursor-pointer">{review.freelancer}</h4>
-                    <p className="text-sm text-gray-500">{review.role} <span className="mx-1">•</span> {review.project}</p>
+                    <h4 className="font-bold text-gray-900 hover:text-teal-600 transition-colors cursor-pointer">{review.reviewee?.full_name || 'Unknown User'}</h4>
+                    <p className="text-sm text-gray-500">{review.reviewee?.role || 'Freelancer'} <span className="mx-1">•</span> {review.contract?.project?.title || 'Unknown Project'}</p>
                   </div>
                 </div>
-                <span className="text-sm font-medium text-gray-400">{review.date}</span>
+                <span className="text-sm font-medium text-gray-400">{new Date(review.created_at).toLocaleDateString()}</span>
               </div>
 
               <div className="ml-16">
@@ -105,17 +143,7 @@ export default function Reviews() {
                     <Star key={s} className={`w-4 h-4 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
                   ))}
                 </div>
-                <p className="text-gray-700 leading-relaxed text-sm mb-4">"{review.feedback}"</p>
-                
-                {review.response && (
-                  <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl mt-4 flex gap-3">
-                    <MessageSquare className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 mb-1">Freelancer's Response:</p>
-                      <p className="text-sm text-gray-600">{review.response}</p>
-                    </div>
-                  </div>
-                )}
+                <p className="text-gray-700 leading-relaxed text-sm mb-4">"{review.comment}"</p>
 
                 <div className="mt-4 flex gap-3">
                   <button className="text-xs font-semibold text-teal-600 hover:text-teal-700">Edit Review</button>
@@ -123,15 +151,45 @@ export default function Reviews() {
                 </div>
               </div>
             </div>
-          ))}
+          )) : activeTab === 'given' && reviewsGiven.length === 0 ? (
+            <div className="p-12 text-center">
+              <Star className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-gray-900 mb-2">No given reviews</h3>
+              <p className="text-sm text-gray-500">You haven't left any reviews for freelancers yet.</p>
+            </div>
+          ) : null}
 
-          {activeTab === 'received' && (
+          {!isLoading && activeTab === 'received' && reviewsReceived.length > 0 ? reviewsReceived.map((review) => (
+            <div key={review.id} className="p-6 md:p-8 hover:bg-gray-50/50 transition-colors">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 shrink-0">
+                    {review.reviewer?.full_name?.charAt(0) || 'U'}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900 hover:text-teal-600 transition-colors cursor-pointer">{review.reviewer?.full_name || 'Unknown User'}</h4>
+                    <p className="text-sm text-gray-500">{review.reviewer?.role || 'Freelancer'} <span className="mx-1">•</span> {review.contract?.project?.title || 'Unknown Project'}</p>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-gray-400">{new Date(review.created_at).toLocaleDateString()}</span>
+              </div>
+
+              <div className="ml-16">
+                <div className="flex mb-3">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className={`w-4 h-4 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                  ))}
+                </div>
+                <p className="text-gray-700 leading-relaxed text-sm mb-4">"{review.comment}"</p>
+              </div>
+            </div>
+          )) : !isLoading && activeTab === 'received' && reviewsReceived.length === 0 ? (
             <div className="p-12 text-center">
               <Star className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-900 mb-2">No received reviews</h3>
               <p className="text-sm text-gray-500">Freelancers haven't left any reviews for your company yet.</p>
             </div>
-          )}
+          ) : null}
 
           {activeTab === 'pending' && (
             <div className="p-12 text-center">

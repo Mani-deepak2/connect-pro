@@ -48,16 +48,7 @@ export default function ClientTeam() {
     setIsLoading(false)
   }
 
-  // Fallback to MOCK data ONLY if the database returns literally 0 applicants.
-  // This satisfies the "never display blank content" requirement if the DB is unpopulated.
-  const MOCK_APPLICANTS = [
-    { id: '1', freelancer: { full_name: 'Alex Rivera', professional_title: 'Full Stack Engineer', location: 'United States', hourly_rate: 65, skills: ['React', 'Node.js', 'PostgreSQL'] }, status: 'pending', project: { title: 'E-commerce Redesign' }, created_at: new Date().toISOString() },
-    { id: '2', freelancer: { full_name: 'Emily Chen', professional_title: 'UI/UX Designer', location: 'Canada', hourly_rate: 50, skills: ['Figma', 'Prototyping', 'User Research'] }, status: 'shortlisted', project: { title: 'Mobile App Design' }, created_at: new Date().toISOString() },
-    { id: '3', freelancer: { full_name: 'David Kim', professional_title: 'Backend Developer', location: 'South Korea', hourly_rate: 75, skills: ['AWS', 'Docker', 'Python'] }, status: 'rejected', project: { title: 'API Gateway Build' }, created_at: new Date().toISOString() },
-    { id: '4', freelancer: { full_name: 'Sarah Smith', professional_title: 'Mobile Developer', location: 'United Kingdom', hourly_rate: 55, skills: ['React Native', 'Swift'] }, status: 'accepted', project: { title: 'Fitness Tracking App' }, created_at: new Date().toISOString() },
-  ]
-
-  const displayApplicants = applicants.length > 0 ? applicants : MOCK_APPLICANTS
+  const displayApplicants = applicants
 
   const filteredApplicants = displayApplicants.filter(app => {
     if (activeTab !== 'all' && app.status !== activeTab) return false

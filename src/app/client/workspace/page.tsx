@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { PlusCircle, Search, Filter, MoreVertical, Edit, Copy, Archive, CheckCircle, Trash2, Clock, Users, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -7,7 +7,7 @@ import { Project } from '@/types'
 import { ProjectCardSkeleton } from '@/components/ui/LoadingSkeleton'
 import { useSearchParams } from 'next/navigation'
 
-export default function MyProjects() {
+function MyProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -137,7 +137,7 @@ export default function MyProjects() {
                     
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 mb-3">
                       <div className="flex items-center gap-1.5 font-medium text-gray-700">
-                        {project.budget_type === 'fixed' ? `$${project.fixed_budget}` : `$${project.hourly_rate_min} - $${project.hourly_rate_max}/hr`}
+                        {project.budget_type === 'fixed' ? `$${project.budget_amount}` : `$${project.budget_amount}/hr`}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-4 h-4" /> Created {new Date(project.created_at).toLocaleDateString()}
@@ -200,3 +200,12 @@ export default function MyProjects() {
     </div>
   )
 }
+
+export default function MyProjects() {
+  return (
+    <Suspense fallback={<div className="p-10">Loading projects...</div>}>
+      <MyProjectsContent />
+    </Suspense>
+  )
+}
+

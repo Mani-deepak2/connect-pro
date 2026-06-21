@@ -1,17 +1,50 @@
 "use client"
-import { useState } from 'react'
-import { FileText, Clock, DollarSign, Calendar, CheckCircle, ChevronRight, Play, Square, ExternalLink } from 'lucide-react'
-
-const MOCK_CONTRACTS = [
-  { id: 'CON-2026-891', client: 'Acme Corp', project: 'E-commerce Redesign', type: 'Hourly', rate: '$65/hr', status: 'active', startDate: '2026-06-01', loggedHours: 12.5, weeklyLimit: 40, earned: '$812.50' },
-  { id: 'CON-2026-742', client: 'HealthFlow', project: 'Mobile App Design', type: 'Fixed Price', rate: '$5,000', status: 'active', startDate: '2026-05-15', nextMilestone: 'Milestone 2: High Fidelity Mocks', earned: '$1,500.00' },
-  { id: 'CON-2026-921', client: 'TechStart Inc.', project: 'Backend API Development', type: 'Hourly', rate: '$50/hr', status: 'completed', startDate: '2026-01-10', endDate: '2026-04-20', earned: '$12,500.00' },
-]
+import { useState, useEffect } from 'react'
+import { FileText, Clock, DollarSign, Calendar, CheckCircle, ChevronRight, Play, Square, ExternalLink, Loader2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
 
 export default function Contracts() {
   const [activeTab, setActiveTab] = useState('active')
+  const [contracts, setContracts] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredContracts = MOCK_CONTRACTS.filter(c => {
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchContracts()
+  }, [])
+
+  const fetchContracts = async () => {
+    setIsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('contracts')
+      .select('*, project:projects(title, budget_type), client:users!contracts_client_id_fkey(full_name)')
+      .eq('freelancer_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (data) {
+      const mappedContracts = data.map((c: any) => ({
+        id: c.id,
+        client: c.client?.full_name || 'Unknown Client',
+        project: c.project?.title || 'Unknown Project',
+        type: c.project?.budget_type === 'fixed' ? 'Fixed Price' : 'Hourly',
+        rate: c.project?.budget_type === 'fixed' ? `$${c.amount}` : `$${c.amount}/hr`,
+        status: c.status,
+        startDate: new Date(c.created_at).toLocaleDateString(),
+        loggedHours: 0,
+        weeklyLimit: 40,
+        earned: '$0.00',
+        nextMilestone: 'N/A'
+      }))
+      setContracts(mappedContracts)
+    }
+    setIsLoading(false)
+  }
+
+  const filteredContracts = contracts.filter(c => {
     if (activeTab === 'active') return c.status === 'active'
     if (activeTab === 'completed') return c.status === 'completed'
     return true
@@ -32,8 +65,8 @@ export default function Contracts() {
         {/* Tabs */}
         <div className="flex px-2 pt-2 border-b border-gray-100 bg-gray-50/50 rounded-t-3xl">
           {[
-            { id: 'active', label: 'Active Contracts', count: 2 },
-            { id: 'completed', label: 'Completed', count: 1 },
+            { id: 'active', label: 'Active Contracts', count: contracts.filter(c => c.status === 'active').length },
+            { id: 'completed', label: 'Completed', count: contracts.filter(c => c.status === 'completed').length },
           ].map(tab => (
             <button
               key={tab.id}
@@ -54,7 +87,9 @@ export default function Contracts() {
         </div>
 
         <div className="divide-y divide-gray-100">
-          {filteredContracts.length > 0 ? (
+          {isLoading ? (
+            <div className="p-12 text-center flex justify-center"><Loader2 className="w-8 h-8 text-teal-600 animate-spin" /></div>
+          ) : filteredContracts.length > 0 ? (
             filteredContracts.map(contract => (
               <div key={contract.id} className="p-6 md:p-8 hover:bg-gray-50/50 transition-colors">
                 
@@ -65,7 +100,7 @@ export default function Contracts() {
                     </h2>
                     <p className="text-sm font-medium text-gray-600">
                       {contract.client} <span className="mx-1 text-gray-300">•</span> 
-                      <span className="font-mono text-xs">{contract.id}</span>
+                      <span className="font-mono text-xs">{contract.id.substring(0, 13)}</span>
                     </p>
                   </div>
                   <div className="flex flex-col items-start md:items-end">

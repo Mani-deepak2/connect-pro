@@ -1,11 +1,11 @@
 "use client"
 import { Bell, Search, User } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { CreditBalance } from './CreditBalance'
 
-export function TopNavBar() {
+export function TopNavBar({ userType = 'client' }: { userType?: 'client' | 'freelancer' | 'admin' }) {
   const [showNotifications, setShowNotifications] = useState(false)
 
   const [notifications, setNotifications] = useState<any[]>([])
@@ -126,7 +126,7 @@ export function TopNavBar() {
           <div className="h-8 w-px bg-gray-200"></div>
 
           {/* Mini Profile */}
-          <Link href="/client/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <Link href={`/${userType}/profile`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold">
               <User className="w-4 h-4" />
             </div>

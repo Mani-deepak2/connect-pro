@@ -127,6 +127,7 @@ export default function EditProfilePage() {
     if (error) {
       alert('Error saving profile: ' + error.message)
     } else {
+      router.refresh()
       router.push(`/profile/${username}`)
     }
   }

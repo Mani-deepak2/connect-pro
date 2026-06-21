@@ -32,7 +32,7 @@ export interface ClientProfile {
   created_at: string;
 }
 
-export type ProjectStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
+export type ProjectStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled' | 'closed';
 export type BudgetType = 'fixed' | 'hourly';
 
 export interface Project {
