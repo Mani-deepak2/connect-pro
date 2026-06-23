@@ -1,0 +1,187 @@
+"use client"
+import { useState, useEffect } from 'react'
+import { FileText, Clock, DollarSign, Calendar, CheckCircle, ChevronRight, Play, Square, ExternalLink, Loader2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
+
+export default function Contracts() {
+  const [activeTab, setActiveTab] = useState('active')
+  const [contracts, setContracts] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchContracts()
+  }, [])
+
+  const fetchContracts = async () => {
+    setIsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('contracts')
+      .select('*, project:projects(title, budget_type), client:users!contracts_client_id_fkey(full_name)')
+      .eq('freelancer_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (data) {
+      const mappedContracts = data.map((c: any) => ({
+        id: c.id,
+        client: c.client?.full_name || 'Unknown Client',
+        project: c.project?.title || 'Unknown Project',
+        type: c.project?.budget_type === 'fixed' ? 'Fixed Price' : 'Hourly',
+        rate: c.project?.budget_type === 'fixed' ? `$${c.amount}` : `$${c.amount}/hr`,
+        status: c.status,
+        startDate: new Date(c.created_at).toLocaleDateString(),
+        loggedHours: 0,
+        weeklyLimit: 40,
+        earned: '$0.00',
+        nextMilestone: 'N/A'
+      }))
+      setContracts(mappedContracts)
+    }
+    setIsLoading(false)
+  }
+
+  const filteredContracts = contracts.filter(c => {
+    if (activeTab === 'active') return c.status === 'active'
+    if (activeTab === 'completed') return c.status === 'completed'
+    return true
+  })
+
+  return (
+    <div className="p-6 md:p-10 text-gray-900 h-full overflow-y-auto bg-gray-50/50">
+      
+      {/* Header */}
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">My Contracts</h1>
+        <p className="text-gray-500">Manage your active engagements, milestones, and tracked hours.</p>
+      </header>
+
+      {/* Main Content */}
+      <div className="bg-white border border-gray-100 rounded-3xl shadow-sm mb-8">
+        
+        {/* Tabs */}
+        <div className="flex px-2 pt-2 border-b border-gray-100 bg-gray-50/50 rounded-t-3xl">
+          {[
+            { id: 'active', label: 'Active Contracts', count: contracts.filter(c => c.status === 'active').length },
+            { id: 'completed', label: 'Completed', count: contracts.filter(c => c.status === 'completed').length },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-6 py-4 text-sm font-semibold transition-colors relative flex items-center ${
+                activeTab === tab.id ? 'text-teal-700' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${activeTab === tab.id ? 'bg-teal-100 text-teal-700' : 'bg-gray-200 text-gray-600'}`}>
+                {tab.count}
+              </span>
+              {activeTab === tab.id && (
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-teal-600 rounded-t-full"></span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="divide-y divide-gray-100">
+          {isLoading ? (
+            <div className="p-12 text-center flex justify-center"><Loader2 className="w-8 h-8 text-teal-600 animate-spin" /></div>
+          ) : filteredContracts.length > 0 ? (
+            filteredContracts.map(contract => (
+              <div key={contract.id} className="p-6 md:p-8 hover:bg-gray-50/50 transition-colors">
+                
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 hover:text-teal-600 cursor-pointer transition-colors mb-1">
+                      {contract.project}
+                    </h2>
+                    <p className="text-sm font-medium text-gray-600">
+                      {contract.client} <span className="mx-1 text-gray-300">•</span> 
+                      <span className="font-mono text-xs">{contract.id.substring(0, 13)}</span>
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start md:items-end">
+                    <span className="text-2xl font-bold text-gray-900">{contract.rate}</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-teal-600 bg-teal-50 px-2 py-1 rounded mt-1">
+                      {contract.type}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 mb-6 flex flex-wrap gap-x-8 gap-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Start Date</p>
+                      <p className="font-medium text-gray-900">{contract.startDate}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0">
+                      <DollarSign className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Earned</p>
+                      <p className="font-bold text-emerald-600">{contract.earned}</p>
+                    </div>
+                  </div>
+
+                  {contract.type === 'Hourly' && contract.status === 'active' && (
+                    <div className="flex items-center gap-3 ml-auto">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">This Week</p>
+                        <p className="font-medium text-gray-900"><span className="font-bold">{contract.loggedHours}</span> / {contract.weeklyLimit} hrs</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-sm shadow-emerald-500/20 transition-colors" title="Start Timer">
+                          <Play className="w-4 h-4 ml-0.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {contract.type === 'Fixed Price' && contract.status === 'active' && (
+                    <div className="flex items-center gap-3 ml-auto bg-white p-3 rounded-xl border border-gray-200">
+                      <CheckCircle className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Up Next</p>
+                        <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{contract.nextMilestone}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors text-sm shadow-sm flex items-center">
+                    <ExternalLink className="w-4 h-4 mr-2" /> View Contract Details
+                  </button>
+                  {contract.status === 'active' && (
+                    <button className="px-5 py-2.5 bg-teal-600 text-white font-medium rounded-xl hover:bg-teal-700 transition-colors text-sm shadow-sm flex items-center">
+                      Submit Work
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            ))
+          ) : (
+            <div className="p-12 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">No {activeTab} contracts</h3>
+              <p className="text-sm text-gray-500">You don't have any {activeTab} contracts at the moment.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  )
+}
