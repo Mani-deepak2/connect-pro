@@ -1,19 +1,47 @@
 "use client"
-import { useState } from 'react'
-import { Search, Filter, MapPin, Star, Clock, CheckCircle, MessageSquare, Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, Filter, MapPin, Star, Clock, CheckCircle, MessageSquare, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-
-const MOCK_FREELANCERS = [
-  { id: 1, name: 'Alex Rivera', title: 'Senior Full Stack Developer', skills: ['React', 'Node.js', 'PostgreSQL'], location: 'United States', rate: '$65/hr', rating: 4.9, jobs: 42, success: '98%', img: 'A', bg: 'bg-blue-100', text: 'text-blue-700' },
-  { id: 2, name: 'Emily Chen', title: 'UX/UI Designer & Researcher', skills: ['Figma', 'Prototyping', 'User Testing'], location: 'Canada', rate: '$50/hr', rating: 5.0, jobs: 89, success: '100%', img: 'E', bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  { id: 3, name: 'David Kim', title: 'DevOps Engineer', skills: ['AWS', 'Docker', 'Kubernetes'], location: 'South Korea', rate: '$85/hr', rating: 4.8, jobs: 24, success: '95%', img: 'D', bg: 'bg-purple-100', text: 'text-purple-700' },
-  { id: 4, name: 'Sarah Smith', title: 'Mobile App Developer', skills: ['React Native', 'Swift', 'Kotlin'], location: 'United Kingdom', rate: '$55/hr', rating: 4.9, jobs: 56, success: '99%', img: 'S', bg: 'bg-orange-100', text: 'text-orange-700' },
-  { id: 5, name: 'Michael Johnson', title: 'Backend Systems Expert', skills: ['Python', 'Django', 'Redis'], location: 'Australia', rate: '$70/hr', rating: 4.7, jobs: 112, success: '94%', img: 'M', bg: 'bg-teal-100', text: 'text-teal-700' },
-]
+import { createClient } from '@/utils/supabase/client'
 
 export default function FindFreelancers() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeFilter, setActiveFilter] = useState('All')
+  const [freelancers, setFreelancers] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchFreelancers()
+  }, [])
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchFreelancers(searchTerm)
+    }, 500)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [searchTerm])
+
+  const fetchFreelancers = async (search = '') => {
+    setIsLoading(true)
+    let query = supabase
+      .from('freelancer_profiles')
+      .select('*, users!inner(username, role)')
+
+    if (search.trim()) {
+      // Use logical OR properly constructed for Supabase
+      query = query.or(`full_name.ilike.%${search}%,title.ilike.%${search}%,skills.cs.{${search}}`)
+    }
+
+    const { data, error } = await query.limit(20)
+
+    if (error) {
+      console.error(error)
+    } else if (data) {
+      setFreelancers(data)
+    }
+    setIsLoading(false)
+  }
 
   return (
     <div className="p-6 md:p-10 text-gray-900 h-full overflow-y-auto">
@@ -46,11 +74,10 @@ export default function FindFreelancers() {
         {['All', 'Development', 'Design', 'Marketing', 'Writing', 'Video', 'Admin'].map(filter => (
           <button 
             key={filter}
-            onClick={() => setActiveFilter(filter)}
             className={`px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${
-              activeFilter === filter 
-                ? 'bg-teal-50 border-teal-200 text-teal-700' 
-                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              filter === 'All' 
+                ? 'bg-gray-900 text-white border-gray-900' 
+                : 'bg-white text-gray-600 border-gray-200 hover:border-teal-500 hover:text-teal-600'
             }`}
           >
             {filter}
@@ -58,118 +85,94 @@ export default function FindFreelancers() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        {/* Main Results */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-900">{MOCK_FREELANCERS.length} results found</h2>
-            <select className="bg-transparent text-sm text-gray-600 border-none outline-none font-medium cursor-pointer">
-              <option>Sort by: Recommended</option>
-              <option>Highest Rated</option>
-              <option>Lowest Hourly Rate</option>
-              <option>Most Jobs Completed</option>
-            </select>
-          </div>
-
-          {MOCK_FREELANCERS.map(freelancer => (
-            <div key={freelancer.id} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex flex-col md:flex-row gap-6">
-                
-                {/* Avatar & Rate */}
-                <div className="flex flex-col items-center gap-3 shrink-0">
-                  <div className={`w-20 h-20 rounded-full ${freelancer.bg} ${freelancer.text} flex items-center justify-center text-2xl font-bold`}>
-                    {freelancer.img}
+      {/* Freelancer Grid */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+        </div>
+      ) : freelancers.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
+          <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-900 mb-2">No freelancers found</h3>
+          <p className="text-gray-500">Try adjusting your search criteria or filters.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {freelancers.map(freelancer => (
+            <Link href={`/profile/${freelancer.users?.username}`} key={freelancer.user_id} className="block group">
+              <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md hover:border-teal-200 transition-all">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      {freelancer.profile_image ? (
+                        <img src={freelancer.profile_image} alt={freelancer.full_name} className="w-16 h-16 rounded-full object-cover shadow-sm border border-gray-100" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xl font-bold border border-teal-200">
+                          {(freelancer.full_name || freelancer.users?.username || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg group-hover:text-teal-600 transition-colors">
+                        {freelancer.full_name} <span className="text-sm font-normal text-gray-500">@{freelancer.users?.username}</span>
+                      </h3>
+                      <p className="text-teal-600 font-medium">{freelancer.title || 'Freelancer'}</p>
+                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                        {freelancer.location && <span className="flex items-center"><MapPin className="w-3.5 h-3.5 mr-1" /> {freelancer.location}</span>}
+                        <span className="flex items-center text-amber-500 font-medium"><Star className="w-3.5 h-3.5 mr-1 fill-current" /> 5.0</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p className="font-bold text-gray-900">{freelancer.rate}</p>
-                  </div>
+                  <button className="text-gray-400 hover:text-teal-600 transition-colors p-2 hover:bg-teal-50 rounded-full">
+                    <CheckCircle className="w-6 h-6" />
+                  </button>
                 </div>
 
-                {/* Details */}
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-2">
+                <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                  {freelancer.bio || 'No description provided.'}
+                </p>
+
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {freelancer.skills && freelancer.skills.slice(0, 4).map((skill: string) => (
+                    <span key={skill} className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-medium border border-gray-100">
+                      {skill}
+                    </span>
+                  ))}
+                  {freelancer.skills && freelancer.skills.length > 4 && (
+                    <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-xs font-medium border border-gray-100">
+                      +{freelancer.skills.length - 4} more
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                  <div className="flex items-center gap-4">
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900 hover:text-teal-600 cursor-pointer transition-colors">{freelancer.name}</h3>
-                      <p className="text-gray-600 font-medium">{freelancer.title}</p>
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Rate</p>
+                      <p className="font-bold text-gray-900">${freelancer.hourly_rate || 0}<span className="text-sm font-normal text-gray-500">/hr</span></p>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-colors">
-                        <MessageSquare className="w-5 h-5" />
-                      </button>
-                      <button className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl transition-colors text-sm shadow-sm">
-                        Invite
-                      </button>
+                    <div className="w-px h-8 bg-gray-200"></div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Experience</p>
+                      <p className="font-bold text-gray-900">{freelancer.experience_level || 'Entry'}</p>
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500 mb-4">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" /> {freelancer.location}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-yellow-600 font-medium">
-                      <Star className="w-4 h-4 fill-current" /> {freelancer.rating} ({freelancer.jobs} jobs)
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4 text-emerald-500" /> {freelancer.success} Job Success
-                    </div>
-                  </div>
-
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                    Expert {freelancer.title.toLowerCase()} with over 5 years of experience delivering high-quality solutions for enterprise clients globally. Highly communicative and dedicated to meeting project deadlines.
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    {freelancer.skills.map(skill => (
-                      <span key={skill} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-xs font-medium">
-                        {skill}
-                      </span>
-                    ))}
+                  
+                  <div className="flex gap-2">
+                    <button className="px-4 py-2 bg-teal-50 text-teal-700 font-medium rounded-xl hover:bg-teal-100 transition-colors text-sm">
+                      Message
+                    </button>
+                    <button className="px-4 py-2 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-colors text-sm">
+                      Hire
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
-
-          <div className="pt-6 flex justify-center">
-            <button className="px-6 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition-colors">
-              Load More Talent
-            </button>
-          </div>
         </div>
-
-        {/* Sidebar Filters */}
-        <div className="hidden lg:block space-y-6">
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Hourly Rate</h3>
-            <div className="space-y-3">
-              {['Any Rate', '$10 - $30/hr', '$30 - $60/hr', '$60 & Above'].map(rate => (
-                <label key={rate} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-5 h-5 rounded border border-gray-300 group-hover:border-teal-500 flex items-center justify-center">
-                    {rate === 'Any Rate' && <div className="w-3 h-3 bg-teal-500 rounded-sm"></div>}
-                  </div>
-                  <span className="text-gray-600 text-sm">{rate}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Job Success</h3>
-            <div className="space-y-3">
-              {['Any Success Rate', '90% & Up', '80% & Up'].map(success => (
-                <label key={success} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-5 h-5 rounded border border-gray-300 group-hover:border-teal-500 flex items-center justify-center">
-                    {success === 'Any Success Rate' && <div className="w-3 h-3 bg-teal-500 rounded-sm"></div>}
-                  </div>
-                  <span className="text-gray-600 text-sm">{success}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   )
 }

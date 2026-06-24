@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Search, MoreVertical, Phone, Video, Paperclip, Send, Image as ImageIcon, Smile, Check, CheckCheck, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 
@@ -9,42 +9,86 @@ export default function Messages() {
   const [activeChat, setActiveChat] = useState<any>(null)
   const [messageText, setMessageText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-
+  const [isSending, setIsSending] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
     fetchConversations()
-  }, [])
+
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserId(user.id)
+
+      const channel = supabase.channel('messages_realtime')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+          if (activeChat && payload.new.conversation_id === activeChat.id) {
+            setMessages(prev => [...prev, payload.new])
+            scrollToBottom()
+          }
+          fetchConversations() // Update last message & unread count
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+          if (activeChat && payload.new.conversation_id === activeChat.id) {
+            setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
+          }
+        })
+        .subscribe()
+
+      return () => { supabase.removeChannel(channel) }
+    }
+    setupRealtime()
+  }, [activeChat])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   const fetchConversations = async () => {
-    setIsLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    // Note: in a real complex app you'd fetch the latest message per conversation via a view/RPC.
+    // We'll fetch conversations and messages separately.
     const { data: convs } = await supabase
       .from('conversations')
-      .select('*, freelancer:users!conversations_freelancer_id_fkey(full_name), project:projects(title)')
+      .select('*, freelancer:users!conversations_freelancer_id_fkey(full_name, username), project:projects(title), messages(id, message, is_read, sender_id, created_at)')
       .eq('client_id', user.id)
       .order('updated_at', { ascending: false })
 
     if (convs) {
-      const mappedConvs = convs.map((c: any) => ({
-        id: c.id,
-        name: c.freelancer?.full_name || 'Unknown',
-        role: 'Freelancer',
-        project: c.project?.title || 'General',
-        lastMessage: 'Tap to view messages...',
-        time: new Date(c.updated_at).toLocaleDateString(),
-        unread: 0,
-        online: false,
-        img: c.freelancer?.full_name?.charAt(0) || 'U',
-        bg: 'bg-teal-100',
-        text: 'text-teal-700'
-      }))
+      const mappedConvs = convs.map((c: any) => {
+        // Sort messages to get the latest
+        const sortedMsgs = c.messages?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) || []
+        const latestMessage = sortedMsgs.length > 0 ? sortedMsgs[0] : null
+        const unreadCount = sortedMsgs.filter((m: any) => !m.is_read && m.sender_id !== user.id).length
+
+        return {
+          id: c.id,
+          name: c.freelancer?.full_name || c.freelancer?.username || 'Unknown Freelancer',
+          role: 'Freelancer',
+          project: c.project?.title || 'General Connection',
+          lastMessage: latestMessage ? latestMessage.message : 'No messages yet...',
+          time: latestMessage ? new Date(latestMessage.created_at).toLocaleDateString() : new Date(c.updated_at).toLocaleDateString(),
+          unread: unreadCount,
+          online: false,
+          img: (c.freelancer?.full_name || c.freelancer?.username || 'U').charAt(0).toUpperCase(),
+          bg: 'bg-teal-100',
+          text: 'text-teal-700'
+        }
+      })
       setConversations(mappedConvs)
-      if (mappedConvs.length > 0) {
-        setActiveChat(mappedConvs[0])
-        fetchMessages(mappedConvs[0].id)
+      
+      if (!activeChat && mappedConvs.length > 0) {
+        handleChatClick(mappedConvs[0])
       }
     }
     setIsLoading(false)
@@ -61,13 +105,15 @@ export default function Messages() {
       .order('created_at', { ascending: true })
 
     if (msgs) {
-      setMessages(msgs.map((m: any) => ({
-        id: m.id,
-        isMe: m.sender_id === user.id,
-        message: m.content,
-        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: m.is_read ? 'read' : 'sent'
-      })))
+      setMessages(msgs)
+      scrollToBottom()
+
+      // Mark as read
+      const unreadIds = msgs.filter(m => !m.is_read && m.sender_id !== user.id).map(m => m.id)
+      if (unreadIds.length > 0) {
+        await supabase.from('messages').update({ is_read: true }).in('id', unreadIds)
+        setConversations(prev => prev.map(c => c.id === chatId ? { ...c, unread: 0 } : c))
+      }
     }
   }
 
@@ -75,6 +121,49 @@ export default function Messages() {
     setActiveChat(chat)
     fetchMessages(chat.id)
   }
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!messageText.trim() || !activeChat || !userId) return
+    
+    setIsSending(true)
+    const text = messageText
+    setMessageText('')
+
+    // Optimistic UI update
+    const optimisticMsg = {
+      id: Math.random().toString(),
+      conversation_id: activeChat.id,
+      sender_id: userId,
+      message: text,
+      is_read: false,
+      created_at: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, optimisticMsg])
+    scrollToBottom()
+
+    const { error } = await supabase.from('messages').insert({
+      conversation_id: activeChat.id,
+      sender_id: userId,
+      message: text
+    })
+
+    if (error) {
+      console.error('Error sending message:', error)
+      // Revert optimistic if error
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+      setMessageText(text)
+    } else {
+      await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeChat.id)
+      fetchConversations()
+    }
+    setIsSending(false)
+  }
+
+  const filteredConversations = conversations.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.project.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <div className="flex h-full bg-white overflow-hidden">
@@ -88,7 +177,9 @@ export default function Messages() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text"
-              placeholder="Search messages..."
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-100 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all text-gray-900"
             />
           </div>
@@ -97,9 +188,9 @@ export default function Messages() {
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-teal-600" /></div>
-          ) : conversations.length === 0 ? (
+          ) : filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-500">No conversations found.</div>
-          ) : conversations.map((chat) => (
+          ) : filteredConversations.map((chat) => (
             <button 
               key={chat.id}
               onClick={() => handleChatClick(chat)}
@@ -111,9 +202,6 @@ export default function Messages() {
                 <div className={`w-12 h-12 rounded-full ${chat.bg} ${chat.text} flex items-center justify-center font-bold text-lg`}>
                   {chat.img}
                 </div>
-                {chat.online && (
-                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></span>
-                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-1">
@@ -142,128 +230,111 @@ export default function Messages() {
       {/* Main Chat Window */}
       <div className="hidden md:flex flex-1 flex-col h-full bg-white relative">
         
-        {/* Chat Header */}
-        <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white shrink-0">
-          <div className="flex items-center gap-4">
-            {activeChat && (
-              <>
+        {activeChat ? (
+          <>
+            {/* Chat Header */}
+            <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-full ${activeChat.bg} ${activeChat.text} flex items-center justify-center font-bold`}>
                   {activeChat.img}
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-900">{activeChat.name}</h2>
-                  <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                    {activeChat.online ? (
-                      <><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Online</>
-                    ) : (
-                      <><span className="w-2 h-2 rounded-full bg-gray-400"></span> Offline</>
-                    )}
-                    <span className="mx-1">•</span>
-                    <span>{activeChat.role}</span>
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
-              <Phone className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
-              <Video className="w-5 h-5" />
-            </button>
-            <div className="w-px h-6 bg-gray-200 mx-1"></div>
-            <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-              <Search className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-              <MoreVertical className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[#f8fafc]">
-          <div className="flex justify-center mb-6">
-            <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">
-              Today
-            </span>
-          </div>
-          
-          <div className="space-y-6">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                {!msg.isMe && activeChat && (
-                  <div className={`w-8 h-8 rounded-full ${activeChat.bg} ${activeChat.text} flex items-center justify-center font-bold text-xs mr-3 mt-auto shrink-0`}>
-                    {activeChat.img}
-                  </div>
-                )}
-                
-                <div className={`max-w-[70%] ${msg.isMe ? 'items-end' : 'items-start'} flex flex-col`}>
-                  <div className={`px-5 py-3 rounded-2xl shadow-sm ${
-                    msg.isMe 
-                      ? 'bg-teal-600 text-white rounded-br-sm' 
-                      : 'bg-white text-gray-900 border border-gray-100 rounded-bl-sm'
-                  }`}>
-                    <p className="text-sm leading-relaxed">{msg.message}</p>
-                  </div>
-                  
-                  <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-400 px-1">
-                    <span>{msg.time}</span>
-                    {msg.isMe && (
-                      <CheckCheck className="w-3.5 h-3.5 text-teal-500 ml-1" />
-                    )}
-                  </div>
+                  <h3 className="font-bold text-gray-900">{activeChat.name}</h3>
+                  <p className="text-xs text-gray-500">{activeChat.project}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Typing Indicator */}
-        <div className="h-6 px-6 bg-[#f8fafc]">
-        </div>
-
-        {/* Input Area */}
-        <div className="p-4 bg-white border-t border-gray-200 shrink-0">
-          <div className="flex items-end gap-3 bg-gray-50 border border-gray-200 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all">
-            <div className="flex gap-1 pb-1">
-              <button className="p-2 text-gray-400 hover:text-teal-600 rounded-full transition-colors">
-                <Paperclip className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-400 hover:text-teal-600 rounded-full transition-colors hidden sm:block">
-                <ImageIcon className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-full transition-colors">
+                  <Phone className="w-5 h-5" />
+                </button>
+                <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-full transition-colors">
+                  <Video className="w-5 h-5" />
+                </button>
+                <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-full transition-colors">
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            
-            <textarea 
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Type your message..."
-              className="flex-1 bg-transparent border-none focus:outline-none text-sm text-gray-900 resize-none py-3 max-h-32 min-h-[44px]"
-              rows={1}
-            />
-            
-            <div className="flex gap-2 pb-1">
-              <button className="p-2 text-gray-400 hover:text-teal-600 rounded-full transition-colors hidden sm:block">
-                <Smile className="w-5 h-5" />
-              </button>
-              <button 
-                className={`p-2.5 rounded-full flex items-center justify-center transition-all ${
-                  messageText.trim() 
-                    ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-md shadow-teal-500/20' 
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4 ml-0.5" />
-              </button>
-            </div>
-          </div>
-        </div>
 
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+              {messages.length === 0 ? (
+                <div className="flex justify-center items-center h-full text-gray-500 text-sm">
+                  Send a message to start the conversation!
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {messages.map((msg, idx) => {
+                    const isMe = msg.sender_id === userId
+                    return (
+                      <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[70%] ${isMe ? 'order-1' : 'order-2'}`}>
+                          <div className={`p-4 rounded-2xl ${
+                            isMe 
+                              ? 'bg-teal-600 text-white rounded-tr-sm shadow-sm shadow-teal-500/10' 
+                              : 'bg-white border border-gray-100 text-gray-900 rounded-tl-sm shadow-sm'
+                          }`}>
+                            <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                          </div>
+                          <div className={`flex items-center gap-1 mt-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <span className="text-[11px] text-gray-400 font-medium">
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {isMe && (
+                              msg.is_read ? <CheckCheck className="w-3.5 h-3.5 text-teal-500" /> : <Check className="w-3.5 h-3.5 text-gray-300" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-4 bg-white border-t border-gray-200 shrink-0">
+              <form onSubmit={sendMessage} className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-2 focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-500 transition-all">
+                <button type="button" className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-xl hover:bg-white">
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <textarea 
+                  rows={1}
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage(e);
+                    }
+                  }}
+                  placeholder="Type a message..."
+                  className="flex-1 bg-transparent border-none focus:ring-0 resize-none py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none max-h-32"
+                  style={{ minHeight: '40px' }}
+                />
+                <button type="button" className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-xl hover:bg-white hidden sm:block">
+                  <Smile className="w-5 h-5" />
+                </button>
+                <button 
+                  type="submit"
+                  disabled={!messageText.trim() || isSending}
+                  className="p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/30 text-gray-400">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-gray-100">
+              <Send className="w-8 h-8 text-gray-300" />
+            </div>
+            <p className="text-lg font-medium text-gray-600">Select a conversation to start messaging</p>
+          </div>
+        )}
       </div>
-
     </div>
   )
 }
