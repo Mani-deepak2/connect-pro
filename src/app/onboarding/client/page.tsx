@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 
 interface ClientFormData {
+  username: string;
   company_name: string;
   industry: string;
   company_website: string;
@@ -26,7 +27,7 @@ export default function ClientOnboarding() {
 
   const nextStep = async () => {
     let isValid = false
-    if (step === 1) isValid = await trigger(['company_name'])
+    if (step === 1) isValid = await trigger(['username', 'company_name'])
     if (step === 2) isValid = await trigger(['industry', 'company_website'])
     if (isValid) setStep(s => s + 1)
   }
@@ -54,8 +55,26 @@ export default function ClientOnboarding() {
       return
     }
 
+    // Check username uniqueness
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', data.username)
+      .neq('id', user.id)
+      .single()
+
+    if (existingUser) {
+      setError('Username is already taken. Please choose another.')
+      setIsLoading(false)
+      return
+    }
+
+    // Update username in public.users
+    await supabase.from('users').update({ username: data.username }).eq('id', user.id)
+
     const profilePayload = {
       user_id: user.id,
+      username: data.username,
       company_name: data.company_name,
       industry: data.industry || null,
       company_website: data.company_website || null,
@@ -129,6 +148,16 @@ export default function ClientOnboarding() {
                     Upload Logo
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                   </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-[#15171C] mb-2">Username</label>
+                  <input 
+                    {...register('username', { required: 'Username is required', pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, numbers, and underscores allowed' } })}
+                    placeholder="e.g. acme_corp" 
+                    className="w-full bg-[#F7F6F3] border border-[#ECEAE5] rounded-xl px-4 py-3 text-[#15171C] outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-all" 
+                  />
+                  {errors.username && <p className="text-red-500 text-sm mt-1">{errors.username.message}</p>}
                 </div>
 
                 <div>

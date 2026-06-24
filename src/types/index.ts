@@ -4,6 +4,7 @@ export interface User {
   id: string;
   email: string;
   role: Role;
+  username?: string;
   created_at: string;
 }
 
@@ -18,6 +19,7 @@ export interface FreelancerProfile {
   experience_level: string;
   portfolio_link?: string;
   profile_image?: string;
+  username?: string;
   created_at: string;
 }
 
@@ -29,6 +31,7 @@ export interface ClientProfile {
   company_website?: string;
   company_description: string;
   company_logo?: string;
+  username?: string;
   created_at: string;
 }
 
@@ -93,6 +96,21 @@ export interface CreditTransaction {
 }
 
 export type ContractStatus = 'active' | 'completed' | 'cancelled';
+
+export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
+
+export interface Interview {
+  id: string;
+  client_id: string;
+  freelancer_id: string;
+  project_id?: string;
+  scheduled_at: string;
+  status: InterviewStatus;
+  meeting_link?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Contract {
   id: string;

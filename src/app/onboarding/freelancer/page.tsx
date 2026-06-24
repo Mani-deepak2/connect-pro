@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 
 interface FreelancerFormData {
+  username: string;
   professional_title: string;
   skills: string;
   experience_level: string;
@@ -28,7 +29,7 @@ export default function FreelancerOnboarding() {
 
   const nextStep = async () => {
     let isValid = false
-    if (step === 1) isValid = await trigger(['professional_title'])
+    if (step === 1) isValid = await trigger(['username', 'professional_title'])
     if (step === 2) isValid = await trigger(['skills', 'experience_level'])
     if (step === 3) isValid = await trigger(['hourly_rate', 'portfolio_url'])
     if (isValid) setStep(s => s + 1)
@@ -57,9 +58,27 @@ export default function FreelancerOnboarding() {
       return
     }
 
+    // Check username uniqueness
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', data.username)
+      .neq('id', user.id)
+      .single()
+
+    if (existingUser) {
+      setError('Username is already taken. Please choose another.')
+      setIsLoading(false)
+      return
+    }
+
+    // Update username in public.users
+    await supabase.from('users').update({ username: data.username }).eq('id', user.id)
+
     const profilePayload = {
       user_id: user.id,
       full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+      username: data.username,
       title: data.professional_title,
       skills: data.skills.split(',').map((s: string) => s.trim()).filter(Boolean),
       bio: data.bio,
@@ -149,11 +168,21 @@ export default function FreelancerOnboarding() {
                     Upload Photo
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                   </label>
-                </div>
+                  </div>
+  
+                  <div>
+                    <label className="block text-sm font-semibold text-[#15171C] mb-2">Username</label>
+                    <input 
+                      {...register('username', { required: 'Username is required', pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, numbers, and underscores allowed' } })}
+                      placeholder="e.g. johndoe" 
+                      className="w-full bg-[#F7F6F3] border border-[#ECEAE5] rounded-xl px-4 py-3 text-[#15171C] outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-all" 
+                    />
+                    {errors.username && <p className="text-red-500 text-sm mt-1">{errors.username.message}</p>}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-[#15171C] mb-2">Professional Title</label>
-                  <input 
+                  <div>
+                    <label className="block text-sm font-semibold text-[#15171C] mb-2">Professional Title</label>
+                    <input 
                     {...register('professional_title', { required: 'Required' })}
                     className="w-full bg-white border border-[#ECEAE5] text-[#15171C] rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 transition-all placeholder:text-[#8A8D96]"
                     placeholder="e.g. Senior Full Stack Developer"
